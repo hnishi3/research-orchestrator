@@ -47,6 +47,7 @@ def check_goal_alignment(
     provider: str = "claude_code_cli",
     model: str = "haiku",
     workspace_dir: Optional[Path] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> AlignmentResult:
     """Check goal alignment via the configured provider.
 
@@ -71,7 +72,7 @@ def check_goal_alignment(
             result = _call_anthropic(prompt=prompt, model=model)
             method = "anthropic"
         elif provider_norm == "codex_cli":
-            result = _call_codex_cli(prompt=prompt, model=model, workspace_dir=workspace_dir)
+            result = _call_codex_cli(prompt=prompt, model=model, workspace_dir=workspace_dir, reasoning_effort=reasoning_effort)
             method = "codex_cli"
         else:
             result = _call_claude_code_cli(prompt=prompt, model=model, workspace_dir=workspace_dir)
@@ -106,16 +107,20 @@ def _call_claude_code_cli(*, prompt: str, model: str, workspace_dir: Optional[Pa
     return out
 
 
-def _call_codex_cli(*, prompt: str, model: str, workspace_dir: Optional[Path]) -> Dict[str, Any]:
+def _call_codex_cli(*, prompt: str, model: str, workspace_dir: Optional[Path], reasoning_effort: Optional[str] = None) -> Dict[str, Any]:
     if workspace_dir is None:
         raise ValueError("workspace_dir is required for provider=codex_cli")
     codex_model = str(model or "").strip()
     if codex_model.lower() in {"haiku", "sonnet", "opus"}:
         codex_model = ""
+    overrides: list[str] = []
+    if reasoning_effort:
+        overrides.append(f'model_reasoning_effort="{reasoning_effort}"')
     cfg = CodexCliConfig(
         model=codex_model or None,
         timeout_sec=300,
         sandbox="read-only",
+        config_overrides=overrides,
     )
     cli_json = run_codex_exec_print_json(
         prompt=prompt,

@@ -359,6 +359,7 @@ def run_autopilot_iteration(
                     provider=str(goal_cfg.get("provider") or "claude_code_cli"),
                     model=str(goal_cfg.get("model") or "haiku"),
                     workspace_dir=workspace,
+                    reasoning_effort=goal_cfg.get("reasoning_effort"),
                 )
                 goal_alignment = {
                     "enabled": True,
@@ -720,6 +721,7 @@ def run_autopilot_iteration(
                 provider=str(challenger_cfg.get("provider") or "claude_code_cli"),
                 model=str(challenger_cfg.get("model") or "sonnet"),
                 system_prompt_file=str(challenger_cfg.get("system_prompt_file") or "prompts/challenger.md"),
+                reasoning_effort=challenger_cfg.get("reasoning_effort"),
             )
             if cr is None:
                 challenger_result["skipped_reason"] = "no_scoreboard"

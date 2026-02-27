@@ -935,10 +935,16 @@ def generate_plan_codex(
         "Do NOT include any text outside the JSON object."
     )
 
+    overrides: List[str] = []
+    reasoning = config.get("planner_reasoning_effort") if isinstance(config, dict) else None
+    if reasoning:
+        overrides.append(f'model_reasoning_effort="{reasoning}"')
+
     cfg = CodexCliConfig(
         model=cli_model or None,
         timeout_sec=timeout,
         sandbox="danger-full-access",
+        config_overrides=overrides,
     )
 
     last_err: Optional[str] = None

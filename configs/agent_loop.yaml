@@ -16,10 +16,12 @@
 #   planner:
 #     provider: codex_cli
 #     model: gpt-5.2
+#     reasoning_effort: xhigh    # passed as -c model_reasoning_effort="xhigh"
 #     max_actions: 6
 #
 # Note: "pro" models (gpt-5.2-pro) are only available via OpenAI API (Option A).
 #       Codex CLI (Option B) supports base models (gpt-5.2) at no per-token cost.
+#       reasoning_effort for Codex CLI accepts: low, medium, high, xhigh.
 
 planner:
   provider: claude_code_cli   # "openai" | "claude_code_cli" | "codex_cli"

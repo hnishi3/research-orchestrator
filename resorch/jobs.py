@@ -1323,9 +1323,12 @@ def _run_claude_code_cli_job(*, ledger: Ledger, job_id: str) -> Dict[str, Any]:
 
     try:
         if provider_name == "codex_cli":
-            config_overrides = spec.get("config_overrides", [])
+            config_overrides = list(spec.get("config_overrides", []))
             if not isinstance(config_overrides, list):
                 raise SystemExit("codex_cli/review spec.config_overrides must be a list of strings.")
+            reasoning = spec.get("reasoning_effort")
+            if reasoning:
+                config_overrides.insert(0, f'model_reasoning_effort="{reasoning}"')
             cfg = CodexCliConfig(
                 model=model_for_event,
                 timeout_sec=int(spec.get("timeout_sec", 900)),

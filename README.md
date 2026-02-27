@@ -152,7 +152,21 @@ review:
     # ...
 ```
 
-To use Claude as the Planner, set `provider: claude_code_cli` and `model: opus` (or sonnet/haiku). Claude Code CLI is subscription-based — no per-token API cost. The orchestrator removes `ANTHROPIC_API_KEY` from the subprocess environment to avoid accidental billing.
+**Default**: Claude Code CLI (`provider: claude_code_cli`, `model: opus`) — subscription-based, no per-token API cost.
+
+**Provider options**:
+- `claude_code_cli` — Claude Code CLI (subscription). Models: `haiku`, `sonnet`, `opus`.
+- `codex_cli` — Codex CLI (subscription). Models: `gpt-5.2`, `gpt-5.3-codex`, etc. Supports `reasoning_effort` (`low`/`medium`/`high`/`xhigh`).
+- `openai` — OpenAI Responses API (per-token cost, requires `OPENAI_API_KEY`). Also supports `reasoning_effort` and `background` (async).
+
+**Codex-only example** (for users who only have Codex CLI):
+```yaml
+planner:
+  provider: codex_cli
+  model: gpt-5.2
+  reasoning_effort: xhigh
+  max_actions: 6
+```
 
 Override per-project via `--config` flag or by placing a copy in `workspaces/<id>/configs/agent_loop.yaml`.
 
@@ -209,6 +223,25 @@ pre_exec_review:
   enabled: true
   model: sonnet                     # Claude model (subscription, no API cost)
   # provider: claude_code_cli       # or "codex_cli" for GPT-based review
+```
+
+**Codex-only example** (all reviewers and guardrails via Codex CLI):
+```yaml
+reviewers:
+  primary:  { provider: codex_cli, model: gpt-5.2, reasoning_effort: xhigh }
+  escalation: { provider: codex_cli, model: gpt-5.2, reasoning_effort: xhigh }
+  reformatter: { provider: codex_cli, model: gpt-5.2, reasoning_effort: medium }
+goal_alignment:
+  provider: codex_cli
+  model: gpt-5.2
+  reasoning_effort: medium
+interpretation_challenger:
+  provider: codex_cli
+  model: gpt-5.2
+  reasoning_effort: medium
+pre_exec_review:
+  provider: codex_cli
+  model: gpt-5.2
 ```
 
 **Workspace override**: place `review_policy.yaml` in `workspaces/<id>/configs/` — auto-loaded, takes precedence over `configs/review_policy.yaml`.
