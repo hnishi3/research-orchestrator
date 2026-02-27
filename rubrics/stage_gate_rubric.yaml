@@ -1,0 +1,39 @@
+# stage_gate_rubric.yaml
+# Minimal, human-readable rubric to make stage transitions less 'vibes-based'.
+
+stages:
+  intake:
+    must_have:
+      - "research_question is explicit"
+      - "evaluation_metric is measurable"
+      - "constraints captured (data/compute/ethics)"
+  lit_review:
+    must_have:
+      - "at least 10 relevant papers mapped (or justified fewer)"
+      - "positioning: 1-line delta vs nearest 3 works"
+      - "citation entries stored (bibtex or structured)"
+  method:
+    must_have:
+      - "baseline defined + runnable"
+      - "ablation plan exists"
+      - "failure mode checklist exists"
+  implementation:
+    must_have:
+      - "tests pass or justified"
+      - "experiment manifests created"
+      - "no secret leakage"
+  analysis:
+    must_have:
+      - "figures have labels/units/n"
+      - "claim->evidence links complete"
+      - "negative results documented"
+  writing:
+    must_have:
+      - "abstract matches results"
+      - "limitations honest"
+      - "related work consistent with claims"
+  submission:
+    must_have:
+      - "repro package ready"
+      - "playbook updated"
+      - "checklist satisfied"

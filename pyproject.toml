@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "research-orchestrator"
+version = "0.1.0"
+description = "A multi-LLM PDCA research agent that coordinates planning, execution, review, and iteration"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Hafumi Nishi"},
+]
+keywords = ["research", "agent", "llm", "orchestrator", "pdca"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "PyYAML>=6.0",
+    "jsonschema>=4.17",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "hypothesis>=6.100",
+    "coverage>=7.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/hnishi3/research-orchestrator"
+Repository = "https://github.com/hnishi3/research-orchestrator"
+
+[project.scripts]
+orchestrator = "resorch.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["resorch*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

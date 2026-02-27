@@ -1,0 +1,44 @@
+# pivot_policy.yaml (v1)
+#
+# Goal: encourage research-style PDCA by detecting "stalled progress" from
+# `results/scoreboard.json` and forcing a review (or human check) to pivot.
+#
+# This policy is intentionally small and deterministic. It does not run models.
+# Tune thresholds per project/domain.
+
+policy_version: 1   # Reserved for future breaking-change detection. Not read by code yet.
+
+# Trigger a review if the primary metric hasn't improved enough recently.
+#
+# Requires that `results/scoreboard.json` contains a numeric value at
+# `metric_path` (default: primary_metric.current.mean).
+no_improvement:
+  enabled: true
+  metric_path: primary_metric.current.mean
+  direction: maximize   # maximize|minimize
+  min_delta: 0.000001   # treat improvements smaller than this as "no improvement"
+  window_runs: 3        # compare the last N runs + current
+  review_level: soft    # soft|hard
+  use_ci_overlap: true  # if adjacent 95% CIs overlap, treat as "no significant improvement"
+
+  # Force-stop: if the pivot fires for N consecutive PDCA iterations,
+  # skip the Planner entirely and halt the agent loop.
+  # This prevents the Planner from burning tokens on a stagnant approach.
+  # Set to 0 to disable.  Default: 3.
+  force_stop_after: 3
+
+# Metric watchdogs: catch cases where no_improvement cannot fire because the
+# primary metric is absent (null) or stuck at the same value without the
+# pivot trigger detecting it (e.g. metric is set but no runs[] are appended).
+#
+# These complement no_improvement — they catch the "pipeline never produced
+# a metric" and "scoreboard bookkeeping is broken" failure modes that
+# no_improvement's numeric comparison cannot detect.
+metric_watchdog:
+  # Stop if primary_metric.current.mean has been null (absent or not set)
+  # for this many consecutive PDCA iterations.  Set to 0 to disable.
+  null_metric_force_stop_after: 3
+
+  # Stop if primary_metric.current.mean is a number but has the exact same
+  # value for this many consecutive iterations.  Set to 0 to disable.
+  unchanged_metric_force_stop_after: 3

@@ -1,0 +1,31 @@
+# stage_transitions.yaml
+# Make topic selection less vibes-based by making gates explicit.
+
+transitions:
+  constraints_to_generate:
+    auto_pass_if:
+      - "constraints_yaml_exists == true"
+
+  generate_to_novelty:
+    auto_pass_if:
+      - "idea_count >= 25"
+
+  novelty_to_smoke_test:
+    auto_reject_if:
+      - "evidence_count < 3"
+      - "novelty_statement == ''"
+    auto_pass_if:
+      - "all_ideas_meet_minimums == true"
+
+  smoke_test_to_value:
+    auto_reject_if:
+      - "smoke_test.verdict in ['fail','timeout']"
+    auto_pass_if:
+      - "smoke_test.verdict == 'pass'"
+
+  value_to_commit:
+    requires:
+      - "redteam_review.completed == true"
+    manual_gate: true
+    auto_reject_if:
+      - "score.total < 3.0"

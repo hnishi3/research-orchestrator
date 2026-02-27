@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OrchestratorTaskResult",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "task_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "success",
+        "failed",
+        "blocked"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "artifacts_created": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "path"
+        ]
+      }
+    },
+    "commands_run": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tests_run": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "next_steps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "risks_or_unknowns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "task_id",
+    "status",
+    "summary"
+  ]
+}

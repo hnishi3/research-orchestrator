@@ -1,0 +1,39 @@
+# Playbook entry schema (YAML)
+
+# NOTE: This is a human-friendly schema.
+# You can enforce it with JSON Schema later if you want.
+
+id: pattern_001
+type: pattern            # pattern | anti_pattern
+domain: general          # e.g., structural_bioinfo, nlp, systems
+name: "Figure and table quality check"
+version: 1
+last_updated: "2026-01-30"
+
+trigger:
+  stage: "analysis"      # intake|lit|method|impl|analysis|writing|submission
+  when: "After completing Stage 4"
+
+intent:
+  outcome: "Eliminate figure/table mistakes that reviewers would flag"
+
+steps:
+  - "Always label axes with units and sample sizes (n)"
+  - "Verify consistency between statistical methods and significance notation"
+  - "Write a one-sentence caption stating the main takeaway of each figure"
+
+tests:
+  - id: check_axes_labels
+    description: "All figures have consistent axis labels and units"
+  - id: caption_claim_alignment
+    description: "Caption claims do not contradict the main text"
+
+pitfalls:
+  - "Even with clean plots, vague claims lead to rejection"
+
+evidence_links:
+  - "review/review_2025_11_stage4.md"
+  - "paper/fig/fig2.png"
+
+confidence: 0.85
+tags: ["figures", "writing", "reproducibility"]

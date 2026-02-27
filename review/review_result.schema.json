@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReviewResult",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string"
+    },
+    "stage": {
+      "type": "string"
+    },
+    "reviewer": {
+      "type": "string"
+    },
+    "overall": {
+      "type": "string"
+    },
+    "recommendation": {
+      "type": "string",
+      "enum": [
+        "accept",
+        "minor",
+        "major",
+        "reject"
+      ]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": [
+              "blocker",
+              "major",
+              "minor",
+              "nit"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "novelty",
+              "method",
+              "analysis",
+              "writing",
+              "reproducibility",
+              "safety",
+              "citations",
+              "paths",
+              "deps",
+              "metrics",
+              "other"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "target_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "suggested_fix": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "estimated_effort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              null,
+              "minutes",
+              "hours",
+              "days"
+            ]
+          },
+          "evidence": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional quote or link to artifact evidence"
+          }
+        },
+        "required": [
+          "severity",
+          "category",
+          "message",
+          "target_paths"
+        ]
+      }
+    }
+  },
+  "required": [
+    "project_id",
+    "stage",
+    "reviewer",
+    "recommendation",
+    "findings"
+  ]
+}

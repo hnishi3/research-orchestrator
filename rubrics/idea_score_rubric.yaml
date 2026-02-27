@@ -1,0 +1,28 @@
+weights:
+  novelty: 0.25
+  feasibility: 0.25
+  impact: 0.20
+  clarity: 0.15
+  reusability: 0.10
+  risk_penalty: 0.05
+
+scales:
+  0: "None / Fatal"
+  1: "Weak"
+  2: "Somewhat weak"
+  3: "Average"
+  4: "Strong"
+  5: "Very strong"
+
+reject_rules:
+  - "evidence_count < 3"
+  - "novelty_statement is empty"
+  - "feasibility.estimated_calendar_days > 30 and contribution_type in [method,system]"
+  - "risk_penalty >= 4 and not (contribution_type in [survey,analysis])"
+
+smoke_test_gate:
+  deadline_hours: 48
+  pass_condition:
+    - "a metric is produced (even on tiny setting)"
+    - "baseline runs end-to-end"
+    - "logs contain seed + commit_hash"

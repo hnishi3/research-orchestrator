@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SmokeTestResult",
+  "type": "object",
+  "properties": {
+    "idea_id": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "completed_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "timeout"
+      ]
+    },
+    "checkpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "skip"
+            ]
+          },
+          "time_minutes": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "output": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "status"
+        ]
+      }
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "commit_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "docker_image": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "seeds_tested": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number"
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ]
+      }
+    }
+  },
+  "required": [
+    "idea_id",
+    "started_at",
+    "verdict"
+  ]
+}

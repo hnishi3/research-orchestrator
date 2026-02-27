@@ -1,0 +1,35 @@
+.DS_Store
+*.log
+
+# Local state (do not commit)
+.orchestrator/
+workspaces/
+
+# Secrets / env
+.env
+.env.*
+.codex/config.toml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Test / coverage artifacts
+.hypothesis/
+mutants/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
+# Generated artifacts
+playbook/extracted/
+
+# SQLite / DBs
+*.db
+*.sqlite
+*.sqlite3

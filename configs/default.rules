@@ -1,0 +1,41 @@
+# default.rules (Codex rules) - Example
+# This file uses Starlark. Adjust to your environment and risk tolerance.
+
+# Block destructive deletes.
+prefix_rule(
+    pattern=["rm"],
+    decision="forbidden",
+    justification="Do not run rm via Codex. Use git to revert or delete files manually with human review.",
+    match=[
+        "rm -rf /",
+        "rm -rf results/",
+        "rm somefile.txt",
+    ],
+)
+
+# Prompt before network calls outside sandbox.
+prefix_rule(
+    pattern=["curl"],
+    decision="prompt",
+    justification="Network access requires explicit approval.",
+    match=[
+        "curl https://example.com",
+    ],
+)
+
+prefix_rule(
+    pattern=["wget"],
+    decision="prompt",
+    justification="Network access requires explicit approval.",
+    match=[
+        "wget https://example.com/file.zip",
+    ],
+)
+
+# Allow safe introspection tools (examples).
+prefix_rule(
+    pattern=["git", "status"],
+    decision="allow",
+    justification="Safe repository introspection.",
+    match=["git status"],
+)

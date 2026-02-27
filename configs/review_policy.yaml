@@ -1,0 +1,132 @@
+# review_policy.yaml (v1)
+#
+# Goal: decide when to request an external review (another model / human).
+# Keep it inspectable and easy to tune.
+#
+# "soft" = cheap / frequent
+# "hard" = expensive / strict (or human-in-the-loop)
+
+policy_version: 1   # Reserved for future breaking-change detection. Not read by code yet.
+
+# Optional human gate: for domains where non-scalar validity matters (e.g., 3D structures),
+# stop the agent when new figures are produced until a human approves.
+requires_visual_inspection: false
+
+visual_inspection:
+  marker_path: results/fig/visual_inspection.ok
+  figure_globs:
+    - results/fig/*.png
+    - results/fig/*.jpg
+    - results/fig/*.jpeg
+    - results/fig/*.svg
+
+# Default: subscription-based (no API cost).
+# For higher-quality reviews, uncomment the openai lines below:
+#   primary:  { provider: openai, model: gpt-5.2-pro, reasoning_effort: medium }
+#   escalation: { provider: openai, model: gpt-5.2-pro, reasoning_effort: high }
+#   reformatter: { provider: openai, model: gpt-5.2 }
+reviewers:
+  primary:
+    provider: claude_code_cli
+    model: opus
+  escalation:
+    provider: claude_code_cli
+    model: opus
+  reformatter:
+    provider: claude_code_cli
+    model: sonnet
+
+review_phases:
+  code_review_gate:
+    enabled: false   # Disabled: auto-promotion makes this redundant (see pre_exec_review below)
+    provider: claude_code_cli
+    model: opus
+    kind: code_review
+    max_fix_retries: 3
+    system_prompt_file: prompts/reviewer_code.md
+  post_exec:
+    # soft review: primary reviewer only (default behavior)
+    # hard review: primary + escalation dual review
+    dual_on_hard: true
+
+targets:
+  # Default files to include in review packets (workspace-relative).
+  default:
+    - notes/problem.md
+    - notes/method.md
+    - topic_brief.md
+    - results/scoreboard.json
+    - notes/analysis_digest.md
+    - reviews/last_review_summary.md
+
+hard_gates:
+  on_stage_transition: true
+  on_claim_create: true
+  on_paper_artifact_change:
+    paths:
+      - paper/**
+      - figures/**
+  on_dependency_change:
+    paths:
+      - requirements*.txt
+      - pyproject.toml
+      - package*.json
+      - environment.yml
+  on_external_fetch: true
+
+soft_triggers:
+  fail_streak:
+    same_task: 2
+    any: 3
+    # Force-stop the agent loop if overall fail streak reaches this.
+    # Prevents burning Planner/Review tokens on a fundamentally broken setup.
+    # Set to 0 to disable.
+    force_stop_after: 6
+  stall_minutes: 30
+  confidence_gap:
+    threshold: 0.35
+  git_diff:
+    max_lines: 200
+    max_files: 8
+  # Soft safety valve: if the agent burns too many planner tokens in a short window,
+  # trigger a review. (Implemented in `agent run` using OpenAI Responses `usage.total_tokens`.)
+  cost_guard:
+    window_minutes: 15
+    max_total_tokens: 200000
+
+# Cheap drift check before calling the Planner (fail-open on errors).
+goal_alignment:
+  enabled: true
+  provider: claude_code_cli   # or "anthropic" (API direct, per-token cost)
+  model: sonnet               # claude_code_cli: "haiku"/"sonnet"/"opus"
+  source_file: notes/problem.md
+  compare_with: objective
+
+# Post-experiment sanity checker (runs after successful shell_exec and scoreboard exists).
+interpretation_challenger:
+  enabled: true
+  provider: claude_code_cli   # or "anthropic" (API direct, per-token cost)
+  model: sonnet               # claude_code_cli: "haiku"/"sonnet"/"opus"
+  trigger: scoreboard_updated
+  system_prompt_file: prompts/challenger.md
+  escalate_on: high
+
+# Auto-apply Planner's next_stage suggestion.
+# Forward (stage advances): applied after review passes (accept/minor).
+# Backward (stage regresses): applied unconditionally (review still runs but doesn't gate).
+auto_stage_update:
+  enabled: true
+  apply_on: [accept, minor]  # review outcomes that allow forward stage change
+
+# Agent-loop optimization: when post-exec findings are lightweight-fixable (minor/nit, code-level),
+# skip the Planner once and re-run the last shell_exec actions.
+lightweight_retry:
+  enabled: true
+  max_consecutive: 2
+
+# Pre-exec review gate (formerly "science_review").
+# Injects scientific accuracy check instructions via claude --print into codex_exec prompts.
+# Subscription-based — zero API cost.
+pre_exec_review:
+  enabled: true
+  model: sonnet

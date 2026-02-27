@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReviewRequest",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string"
+    },
+    "stage": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "balanced",
+        "devils_advocate",
+        "supportive"
+      ]
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rubric": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Path to rubric file"
+    },
+    "time_budget_minutes": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    }
+  },
+  "required": [
+    "project_id",
+    "stage",
+    "mode",
+    "targets",
+    "questions"
+  ]
+}

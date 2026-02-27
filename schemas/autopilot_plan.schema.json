@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AutopilotPlan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "plan_id",
+    "project_id",
+    "iteration",
+    "objective",
+    "self_confidence",
+    "evidence_strength",
+    "actions",
+    "should_stop"
+  ],
+  "properties": {
+    "plan_id": {
+      "type": "string",
+      "description": "Unique plan id (opaque)."
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "iteration": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "objective": {
+      "type": "string",
+      "description": "One sentence objective for this iteration."
+    },
+    "notes": {
+      "type": "string"
+    },
+    "self_confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Planner's confidence that the plan will work (0-1)."
+    },
+    "evidence_strength": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "How strong the evidence is for the plan's key assumptions (0-1)."
+    },
+    "suggested_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "reasons"
+      ],
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": [
+            "none",
+            "soft",
+            "hard"
+          ]
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reviewer_hint": {
+          "type": "string",
+          "description": "Optional hint for which reviewer/model to use."
+        }
+      }
+    },
+    "next_stage": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Optional suggested stage update. Forward transitions require review pass; backward transitions are applied immediately."
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "task_type",
+          "spec"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "task_type": {
+            "type": "string",
+            "enum": [
+              "codex_exec",
+              "shell_exec"
+            ]
+          },
+          "spec": {
+            "type": "object",
+            "description": "Task spec passed to the orchestrator. IMPORTANT: use exactly these key names. For shell_exec: {\"command\": \"<shell command string>\", \"timeout\": <seconds>}. For codex_exec: {\"prompt\": \"<instruction for Codex>\"}. Do NOT use alternative key names like 'script', 'cmd', 'commands', or 'instructions' — they will be rejected."
+          }
+        }
+      }
+    },
+    "alternatives_considered": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["approach", "reason_rejected"],
+        "properties": {
+          "approach": {
+            "type": "string",
+            "description": "Alternative approach that was considered."
+          },
+          "expected_gain": {
+            "type": "string",
+            "description": "What this approach could have achieved."
+          },
+          "risk": {
+            "type": "string",
+            "description": "Key risk or downside of this approach."
+          },
+          "reason_rejected": {
+            "type": "string",
+            "description": "Why this approach was not chosen."
+          }
+        }
+      },
+      "description": "Alternative approaches considered. Required when exploring new directions (iteration 0, stagnation, challenger escalation, stage change, fail streaks)."
+    },
+    "literature_findings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Optional: key literature findings from web search. Each entry should be a citation or finding (e.g., 'Smith et al. (2024) DOI:10.xxx — showed that ...'). Planner should populate this when the objective involves literature survey or research."
+    },
+    "should_stop": {
+      "type": "boolean",
+      "description": "If true, autopilot should stop after this plan."
+    },
+    "stop_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

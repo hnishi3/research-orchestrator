@@ -1,0 +1,370 @@
+# Tool manifest (interface-first)
+# This is NOT an official MCP config file.
+# It is a project-local contract used to keep the server implementation consistent across languages/SDKs.
+
+tools:
+  - name: search
+    description: |
+      Search across ledger + artifacts. Return lightweight hits (id/title/snippet/metadata).
+      Intended for ChatGPT connectors and general retrieval.
+    input_schema:
+      type: object
+      properties:
+        query: { type: string }
+        project_id: { type: [string, "null"] }
+        kind: { type: [string, "null"], enum: [null, "ledger", "artifact"] }
+        limit: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      required: [query]
+    output_schema:
+      type: object
+      properties:
+        hits:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              title: { type: string }
+              snippet: { type: string }
+              metadata: { type: object }
+            required: [id, title, snippet]
+      required: [hits]
+
+  - name: fetch
+    description: |
+      Fetch a single item by id returned from search. Return full text (or file content).
+    input_schema:
+      type: object
+      properties:
+        id: { type: string }
+      required: [id]
+    output_schema:
+      type: object
+      properties:
+        id: { type: string }
+        content: { type: string }
+        content_type: { type: string, default: "text/markdown" }
+        metadata: { type: object }
+      required: [id, content]
+
+  # Orchestration-friendly tools
+  - name: review.create_packet
+    description: Build a standardized review packet from selected artifacts.
+    input_schema:
+      type: object
+      properties:
+        project_id: { type: string }
+        stage: { type: string }
+        targets:
+          type: array
+          items: { type: string }
+      required: [project_id, stage, targets]
+    output_schema:
+      type: object
+      properties:
+        packet_path: { type: string }
+      required: [packet_path]
+
+  - name: ledger.list_projects
+    description: List projects in the ledger (most-recent first).
+    input_schema:
+      type: object
+      properties:
+        limit: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    output_schema:
+      type: object
+      properties:
+        projects:
+          type: array
+          items: { type: object }
+      required: [projects]
+
+  - name: ledger.get_project
+    description: Get a single project by id.
+    input_schema:
+      type: object
+      properties:
+        project_id: { type: string }
+      required: [project_id]
+    output_schema:
+      type: object
+      properties:
+        project: { type: object }
+      required: [project]
+
+  - name: ledger.list_tasks
+    description: List tasks (optionally filtered).
+    input_schema:
+      type: object
+      properties:
+        project_id: { type: [string, "null"] }
+        status: { type: [string, "null"] }
+        limit: { type: integer, minimum: 1, maximum: 500, default: 200 }
+      required: []
+    output_schema:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items: { type: object }
+      required: [tasks]
+
+  - name: ledger.get_task
+    description: Get a task by id.
+    input_schema:
+      type: object
+      properties:
+        task_id: { type: string }
+      required: [task_id]
+    output_schema:
+      type: object
+      properties:
+        task: { type: object }
+      required: [task]
+
+  - name: artifact.list
+    description: List registered artifacts for a project.
+    input_schema:
+      type: object
+      properties:
+        project_id: { type: string }
+        prefix: { type: [string, "null"] }
+        limit: { type: integer, minimum: 1, maximum: 500, default: 200 }
+      required: [project_id]
+    output_schema:
+      type: object
+      properties:
+        artifacts:
+          type: array
+          items: { type: object }
+      required: [artifacts]
+
+  - name: artifact.get
+    description: Get an artifact file's content by (project_id, path).
+    input_schema:
+      type: object
+      properties:
+        project_id: { type: string }
+        path: { type: string }
+      required: [project_id, path]
+    output_schema:
+      type: object
+      properties:
+        id: { type: string }
+        content: { type: string }
+        content_type: { type: string }
+        metadata: { type: object }
+      required: [id, content]
+
+  - name: artifact.put
+    description: Write an artifact file under the project workspace and register it in the ledger.
+    input_schema:
+      type: object
+      properties:
+        project_id: { type: string }
+        path: { type: string }
+        content: { type: string }
+        mode: { type: string, enum: ["overwrite", "append"], default: "overwrite" }
+        kind: { type: [string, "null"] }
+      required: [project_id, path, content]
+    output_schema:
+      type: object
+      properties:
+        artifact: { type: object }
+      required: [artifact]
+
+  - name: task.create
+    description: Create a task in the ledger.
+    input_schema:
+      type: object
+      properties:
+        project_id: { type: string }
+        type: { type: string }
+        spec: { type: object }
+      required: [project_id, type, spec]
+    output_schema:
+      type: object
+      properties:
+        task: { type: object }
+      required: [task]
+
+  - name: task.run
+    description: Run a task by id (will call Codex for codex_exec tasks).
+    input_schema:
+      type: object
+      properties:
+        task_id: { type: string }
+      required: [task_id]
+    output_schema:
+      type: object
+      properties:
+        task: { type: object }
+        run: { type: object }
+      required: [task, run]
+
+  # Topic Engine (ideas / smoke tests / commit artifacts)
+  - name: idea.list
+    description: List idea records for a project.
+    input_schema:
+      type: object
+      properties:
+        project_id: { type: string }
+        status: { type: [string, "null"] }
+        limit: { type: integer, minimum: 1, maximum: 500, default: 50 }
+      required: [project_id]
+    output_schema:
+      type: object
+      properties:
+        ideas:
+          type: array
+          items: { type: object }
+      required: [ideas]
+
+  - name: idea.get
+    description: Get a single idea record by id.
+    input_schema:
+      type: object
+      properties:
+        idea_id: { type: string }
+      required: [idea_id]
+    output_schema:
+      type: object
+      properties:
+        idea: { type: object }
+      required: [idea]
+
+  - name: idea.set_status
+    description: Set an idea's status.
+    input_schema:
+      type: object
+      properties:
+        idea_id: { type: string }
+        status: { type: string, enum: ["candidate", "active", "rejected", "smoke_passed", "selected", "parked", "done"] }
+      required: [idea_id, status]
+    output_schema:
+      type: object
+      properties:
+        idea: { type: object }
+      required: [idea]
+
+  - name: idea.dedupe_jsonl
+    description: Deduplicate idea candidates in a JSONL file (baseline lexical).
+    input_schema:
+      type: object
+      properties:
+        project_id: { type: string }
+        input_path: { type: string }
+        output_path: { type: string, default: "ideas/deduped.jsonl" }
+        mapping_path: { type: [string, "null"] }
+        threshold: { type: number, minimum: 0, maximum: 1, default: 0.9 }
+      required: [project_id, input_path]
+    output_schema:
+      type: object
+      properties:
+        before: { type: integer }
+        after: { type: integer }
+        output_path: { type: string }
+        mapping_path: { type: string }
+      required: [before, after, output_path, mapping_path]
+
+  - name: smoke.ingest
+    description: "Ingest a smoke test result JSON (schema: schemas/smoke_test_result.schema.json)."
+    input_schema:
+      type: object
+      properties:
+        project_id: { type: string }
+        result_path: { type: string }
+        store_path: { type: [string, "null"] }
+      required: [project_id, result_path]
+    output_schema:
+      type: object
+      properties:
+        stored_path: { type: string }
+        smoke_test: { type: object }
+      required: [stored_path, smoke_test]
+
+  - name: smoke.list
+    description: List smoke test results for a project (optionally filtered by idea).
+    input_schema:
+      type: object
+      properties:
+        project_id: { type: string }
+        idea_id: { type: [string, "null"] }
+        limit: { type: integer, minimum: 1, maximum: 500, default: 50 }
+      required: [project_id]
+    output_schema:
+      type: object
+      properties:
+        smoke_tests:
+          type: array
+          items: { type: object }
+      required: [smoke_tests]
+
+  - name: topic.brief
+    description: Generate topic_brief.md from an idea record (Stage 5 commit artifact).
+    input_schema:
+      type: object
+      properties:
+        project_id: { type: string }
+        idea_id: { type: string }
+        output_path: { type: string, default: "topic_brief.md" }
+        set_selected: { type: boolean, default: false }
+      required: [project_id, idea_id]
+    output_schema:
+      type: object
+      properties:
+        output_path: { type: string }
+      required: [output_path]
+
+  - name: evidence.add
+    description: Add an evidence item (writes evidence/*.json and registers it).
+    input_schema:
+      type: object
+      properties:
+        project_id: { type: string }
+        idea_id: { type: [string, "null"] }
+        kind: { type: string, enum: ["paper", "blog", "doc", "dataset", "benchmark", "repo", "other"] }
+        title: { type: string }
+        url: { type: string }
+        summary: { type: string }
+        retrieved_at: { type: [string, "null"] }
+        relevance: { type: [number, "null"] }
+        meta: { type: [object, "null"] }
+        output_path: { type: [string, "null"] }
+      required: [project_id, kind, title, url, summary]
+    output_schema:
+      type: object
+      properties:
+        evidence: { type: object }
+        stored_path: { type: string }
+      required: [evidence, stored_path]
+
+  - name: evidence.list
+    description: List evidence items for a project.
+    input_schema:
+      type: object
+      properties:
+        project_id: { type: string }
+        idea_id: { type: [string, "null"] }
+        limit: { type: integer, minimum: 1, maximum: 500, default: 50 }
+      required: [project_id]
+    output_schema:
+      type: object
+      properties:
+        evidence:
+          type: array
+          items: { type: object }
+      required: [evidence]
+
+  - name: evidence.get
+    description: Get a single evidence item by id.
+    input_schema:
+      type: object
+      properties:
+        evidence_id: { type: string }
+      required: [evidence_id]
+    output_schema:
+      type: object
+      properties:
+        evidence: { type: object }
+      required: [evidence]
