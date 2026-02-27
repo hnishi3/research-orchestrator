@@ -80,9 +80,9 @@ The **agent loop** (`agent run`) is the primary workflow. Each iteration:
 
 1. **Goal alignment** — verifies the objective hasn't drifted from `notes/problem.md` (Claude Sonnet, fail-open)
 2. **Planner** — reads scoreboard, digest, exploration log, and review history; generates a plan with up to N actions. On key iterations (first, stagnation, errors), requires `alternatives_considered` for exploration diversity
-3. **Pre-exec review gate** — before executing analysis scripts, validates scientific correctness via a 5-item checklist (`claude --print`, fail-open, zero API cost). Configurable in `review_policy.yaml` → `pre_exec_review`
+3. **Pre-exec review gate** — before executing analysis scripts, validates scientific correctness via a 5-item checklist (fail-open). Supports `claude_code_cli` (default, subscription) and `codex_cli` providers. Configurable in `review_policy.yaml` → `pre_exec_review`
 4. **Executor** — Codex CLI runs each action (`codex_exec` or `shell_exec`). Complex shell commands are auto-promoted to `codex_exec` (>40 lines with embedded Python, or workspace script invocations)
-5. **Post-exec review** — evaluates results, creates `review_fix` tasks if needed (OpenAI GPT)
+5. **Post-exec review** — evaluates results, creates `review_fix` tasks if needed. On hard gates, runs dual review (primary + escalation, worst-of policy)
 6. **Interpretation challenger** — sanity-checks updated scoreboard metrics (Claude Sonnet, fail-open)
 7. **Post-step verifier** — rule-based verification checklist for scientific soundness; outputs to `notes/autopilot/verifier_last.{md,json}`
 8. **Pivot check** — if primary metric hasn't improved, triggers a review or stops
@@ -161,10 +161,10 @@ Override per-project via `--config` flag or by placing a copy in `workspaces/<id
 | Layer | When | Default Provider | Purpose |
 |-------|------|------------------|---------|
 | `goal_alignment` | Before Planner | Claude Sonnet (CLI) | Drift detection vs `problem.md` (fail-open) |
-| `pre_exec_review` | Before script execution | Claude Sonnet (`claude --print`) | 5-item science checklist (fail-open) |
+| `pre_exec_review` | Before script execution | Claude Sonnet (CLI) | 5-item science checklist (fail-open) |
 | `code_review_gate` | Before Executor | Claude Opus (CLI) | Code review of planned actions (**disabled by default**) |
-| `post_exec` (primary) | After Executor | OpenAI GPT | Result evaluation |
-| `post_exec` (escalation) | Hard gates | OpenAI GPT | Dual review for critical changes |
+| `post_exec` (primary) | After Executor | Claude Opus (CLI) | Result evaluation |
+| `post_exec` (escalation) | Hard gates | Claude Opus (CLI) | Dual review (worst-of policy) |
 | `interpretation_challenger` | Scoreboard update | Claude Sonnet (CLI) | Sanity-check metrics (fail-open) |
 | `post_step_verifier` | After each step | Rule-based | Verification checklist (no LLM cost) |
 | `lightweight_retry` | Minor findings | (no model) | Skip Planner, re-run with fixes |
@@ -172,6 +172,24 @@ Override per-project via `--config` flag or by placing a copy in `workspaces/<id
 Key sections:
 
 ```yaml
+# --- Reviewer models (post-exec primary / escalation / reformatter) ---
+# Default: Claude Code CLI (subscription, no API cost).
+reviewers:
+  primary:
+    provider: claude_code_cli     # "claude_code_cli" | "openai" | "codex_cli"
+    model: opus
+  escalation:
+    provider: claude_code_cli     # Used for hard gates (dual review)
+    model: opus
+  reformatter:
+    provider: claude_code_cli
+    model: sonnet
+
+# For OpenAI reviewers (per-token cost):
+#   primary:  { provider: openai, model: gpt-5.2-pro, reasoning_effort: medium }
+#   escalation: { provider: openai, model: gpt-5.2-pro, reasoning_effort: high }
+
+# --- Hard / soft triggers ---
 hard_gates:
   on_stage_transition: true
   on_claim_create: true
@@ -186,9 +204,11 @@ soft_triggers:
 
 requires_visual_inspection: false   # stop when new figures appear
 
+# --- Pre-exec review (science checklist, injected into codex_exec prompts) ---
 pre_exec_review:
-  enabled: true                     # 5-item science checklist before script execution
+  enabled: true
   model: sonnet                     # Claude model (subscription, no API cost)
+  # provider: claude_code_cli       # or "codex_cli" for GPT-based review
 ```
 
 **Workspace override**: place `review_policy.yaml` in `workspaces/<id>/configs/` — auto-loaded, takes precedence over `configs/review_policy.yaml`.
@@ -216,11 +236,11 @@ Defines conditions for project stage transitions (e.g., intake → exploration �
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `OPENAI_API_KEY` | OpenAI Planner / Reviewer / Jobs | (required for OpenAI provider) |
-| `ANTHROPIC_API_KEY` | Anthropic API Reviewer | (optional) |
-| `OPENAI_PLANNER_MODEL` | Override planner model | `gpt-5.2-pro` |
-| `PLANNER_PROVIDER` | Override planner provider | `openai` |
-| `RESORCH_ROOT` | Override repo root path | (auto-detect via `SPEC.md` + `AGENTS.md`) |
+| `OPENAI_API_KEY` | Required when using OpenAI provider (planner, reviewer, or jobs) | (none — not needed for default config) |
+| `ANTHROPIC_API_KEY` | Required when using `provider: anthropic` | (none — not needed for `claude_code_cli`) |
+| `OPENAI_PLANNER_MODEL` | Override planner model (env var fallback) | config value takes precedence |
+| `PLANNER_PROVIDER` | Override planner provider (env var fallback) | config value takes precedence |
+| `RESORCH_ROOT` | Override repo root path | (auto-detect via `AGENTS.md` + `resorch/`) |
 | `RESORCH_WEBHOOK_TOKEN` | Webhook authentication | (optional) |
 | `OPENAI_WEBHOOK_SECRET` | Standard Webhooks signature verification | (optional) |
 
