@@ -261,12 +261,14 @@ Applies to analysis/metrics scripts only — skip for helpers, installs, downloa
 --- END PRE-EXEC REVIEW GATE ---
 """
 
+# NOTE: Uses danger-full-access because Codex CLI read-only sandbox prevents
+# reading workspace files due to Landlock.
 PRE_EXEC_REVIEW_INSTRUCTIONS_CODEX = """\
 
 --- PRE-EXEC REVIEW GATE ---
 Before running any Python script that computes metrics or produces results,
 call:
-  codex exec --sandbox read-only --skip-git-repo-check --cd . {model_flag}"Read notes/problem.md and notes/method.md for context, then read \
+  codex exec --sandbox danger-full-access --skip-git-repo-check --cd . {model_flag}"Read notes/problem.md and notes/method.md for context, then read \
   the script at [SCRIPT_PATH]. Check scientific correctness ONLY \
   (not code bugs — you handle those yourself): \
   (1) Label direction: is higher/lower correct for the metric? \

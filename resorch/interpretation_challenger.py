@@ -208,10 +208,11 @@ def _call_codex_cli(*, prompt: str, model: str, system_prompt: str, workspace_di
     overrides: list[str] = []
     if reasoning_effort:
         overrides.append(f'model_reasoning_effort="{reasoning_effort}"')
+    # Codex CLI read-only sandbox prevents reading workspace files due to Landlock.
     cfg = CodexCliConfig(
         model=codex_model or None,
         timeout_sec=900,
-        sandbox="read-only",
+        sandbox="danger-full-access",
         config_overrides=overrides,
     )
     prompt_full = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt

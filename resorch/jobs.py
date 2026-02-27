@@ -1329,10 +1329,11 @@ def _run_claude_code_cli_job(*, ledger: Ledger, job_id: str) -> Dict[str, Any]:
             reasoning = spec.get("reasoning_effort")
             if reasoning:
                 config_overrides.insert(0, f'model_reasoning_effort="{reasoning}"')
+            # Codex CLI read-only sandbox prevents reading workspace files due to Landlock.
             cfg = CodexCliConfig(
                 model=model_for_event,
                 timeout_sec=int(spec.get("timeout_sec", 900)),
-                sandbox=str(spec.get("sandbox") or "read-only"),
+                sandbox=str(spec.get("sandbox") or "danger-full-access"),
                 config_overrides=[str(x) for x in config_overrides],
             )
             cli_json = run_codex_exec_print_json(

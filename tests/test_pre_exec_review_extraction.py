@@ -66,7 +66,7 @@ class TestExtractPreExecReviewResults:
         _write_jsonl(jsonl, [
             _make_command_event(
                 command=(
-                    'codex exec --sandbox read-only --skip-git-repo-check --cd . --model gpt-5.3-codex '
+                    'codex exec --sandbox danger-full-access --skip-git-repo-check --cd . --model gpt-5.3-codex '
                     '"Read notes/problem.md and notes/method.md for context, then read the script at '
                     'scripts/eval.py. Your ENTIRE response must be a single line starting with PASS or FAIL."'
                 ),

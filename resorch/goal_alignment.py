@@ -116,10 +116,11 @@ def _call_codex_cli(*, prompt: str, model: str, workspace_dir: Optional[Path], r
     overrides: list[str] = []
     if reasoning_effort:
         overrides.append(f'model_reasoning_effort="{reasoning_effort}"')
+    # Codex CLI read-only sandbox prevents reading workspace files due to Landlock.
     cfg = CodexCliConfig(
         model=codex_model or None,
         timeout_sec=300,
-        sandbox="read-only",
+        sandbox="danger-full-access",
         config_overrides=overrides,
     )
     cli_json = run_codex_exec_print_json(

@@ -21,7 +21,8 @@ class CodexCliConfig:
     executable: str = "codex"
     timeout_sec: int = 1800
     model: Optional[str] = None
-    sandbox: str = "read-only"
+    # Codex CLI read-only sandbox prevents reading workspace files due to Landlock.
+    sandbox: str = "danger-full-access"
     ephemeral: bool = True
     config_overrides: List[str] = field(default_factory=list)
 
