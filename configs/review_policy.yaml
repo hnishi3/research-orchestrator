@@ -28,8 +28,8 @@ visual_inspection:
 #   reformatter: { provider: openai, model: gpt-5.2 }
 #
 # Alternative B — Codex CLI only (subscription, no API cost, no Claude Code CLI needed):
-#   primary:  { provider: codex_cli, model: gpt-5.2, reasoning_effort: xhigh }
-#   escalation: { provider: codex_cli, model: gpt-5.2, reasoning_effort: xhigh }
+#   primary:  { provider: codex_cli, model: gpt-5.2, reasoning_effort: medium }
+#   escalation: { provider: codex_cli, model: gpt-5.2, reasoning_effort: medium }
 #   reformatter: { provider: codex_cli, model: gpt-5.2, reasoning_effort: medium }
 reviewers:
   primary:

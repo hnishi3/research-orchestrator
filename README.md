@@ -164,7 +164,7 @@ review:
 planner:
   provider: codex_cli
   model: gpt-5.2
-  reasoning_effort: xhigh
+  reasoning_effort: medium          # low | medium | high | xhigh
   max_actions: 6
 ```
 
@@ -228,8 +228,8 @@ pre_exec_review:
 **Codex-only example** (all reviewers and guardrails via Codex CLI):
 ```yaml
 reviewers:
-  primary:  { provider: codex_cli, model: gpt-5.2, reasoning_effort: xhigh }
-  escalation: { provider: codex_cli, model: gpt-5.2, reasoning_effort: xhigh }
+  primary:  { provider: codex_cli, model: gpt-5.2, reasoning_effort: medium }
+  escalation: { provider: codex_cli, model: gpt-5.2, reasoning_effort: medium }
   reformatter: { provider: codex_cli, model: gpt-5.2, reasoning_effort: medium }
 goal_alignment:
   provider: codex_cli

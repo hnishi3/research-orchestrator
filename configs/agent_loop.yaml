@@ -16,7 +16,7 @@
 #   planner:
 #     provider: codex_cli
 #     model: gpt-5.2
-#     reasoning_effort: xhigh    # passed as -c model_reasoning_effort="xhigh"
+#     reasoning_effort: medium   # passed as -c model_reasoning_effort="medium"
 #     max_actions: 6
 #
 # Note: "pro" models (gpt-5.2-pro) are only available via OpenAI API (Option A).
