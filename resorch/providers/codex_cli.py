@@ -36,23 +36,24 @@ def run_codex_exec_print_json(
 ) -> Dict[str, Any]:
     """Run Codex CLI in non-interactive JSONL mode and return parsed output.
 
-    This executes `codex exec --json` and uses `--output-schema` +
-    `--output-last-message` so callers can consume a structured final JSON.
+    When *json_schema* is provided, ``--output-schema`` + ``--output-last-message``
+    are used for server-side constrained decoding (guaranteed schema compliance but
+    can be **very slow** — 30+ min with GPT-5.2 due to OpenAI constrained decoding).
+
+    When *json_schema* is ``None``, the schema is omitted from the CLI flags and
+    the JSON response is extracted from JSONL event text via ``extract_json_object``.
+    This is **~40x faster** and GPT-5.2 reliably returns valid JSON when the prompt
+    includes the schema description.
     """
 
     cfg = config or CodexCliConfig()
     exe = shutil.which(cfg.executable) or cfg.executable
 
-    schema_fd, schema_tmp = tempfile.mkstemp(prefix="resorch-codex-schema-", suffix=".json")
-    last_fd, last_tmp = tempfile.mkstemp(prefix="resorch-codex-last-", suffix=".txt")
-    os.close(schema_fd)
-    os.close(last_fd)
-    schema_path = Path(schema_tmp)
-    last_message_path = Path(last_tmp)
-    try:
-        schema_payload = _normalize_schema_for_codex(json_schema if isinstance(json_schema, dict) else {"type": "object"})
-        schema_path.write_text(json.dumps(schema_payload, ensure_ascii=False), encoding="utf-8")
+    use_schema = json_schema is not None
 
+    schema_path: Optional[Path] = None
+    last_message_path: Optional[Path] = None
+    try:
         cmd = [
             exe,
             "exec",
@@ -62,11 +63,21 @@ def run_codex_exec_print_json(
             "--cd",
             str(workspace_dir),
             "--skip-git-repo-check",
-            "--output-schema",
-            str(schema_path),
-            "--output-last-message",
-            str(last_message_path),
         ]
+
+        if use_schema:
+            schema_fd, schema_tmp = tempfile.mkstemp(prefix="resorch-codex-schema-", suffix=".json")
+            last_fd, last_tmp = tempfile.mkstemp(prefix="resorch-codex-last-", suffix=".txt")
+            os.close(schema_fd)
+            os.close(last_fd)
+            schema_path = Path(schema_tmp)
+            last_message_path = Path(last_tmp)
+
+            schema_payload = _normalize_schema_for_codex(json_schema if isinstance(json_schema, dict) else {"type": "object"})
+            schema_path.write_text(json.dumps(schema_payload, ensure_ascii=False), encoding="utf-8")
+            cmd.extend(["--output-schema", str(schema_path)])
+            cmd.extend(["--output-last-message", str(last_message_path)])
+
         if cfg.ephemeral:
             cmd.append("--ephemeral")
         if cfg.model:
@@ -96,61 +107,46 @@ def run_codex_exec_print_json(
             raise CodexCliError(f"Codex CLI failed (exit {proc.returncode}): {stderr}")
 
         stdout = proc.stdout or ""
-        events: List[Dict[str, Any]] = []
-        usage: Dict[str, Any] = {}
-        event_errors: List[str] = []
-        for line in stdout.splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                event = json.loads(stripped)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(event, dict):
-                continue
-            events.append(event)
-            if event.get("type") == "turn.completed":
-                u = event.get("usage")
-                if isinstance(u, dict):
-                    usage = u
-            if event.get("type") == "error":
-                msg = event.get("message")
-                if isinstance(msg, str) and msg.strip():
-                    event_errors.append(msg.strip())
-            if event.get("type") == "turn.failed":
-                err = event.get("error")
-                if isinstance(err, dict):
-                    msg = err.get("message")
-                    if isinstance(msg, str) and msg.strip():
-                        event_errors.append(msg.strip())
-
-        last_text = ""
-        try:
-            last_text = last_message_path.read_text(encoding="utf-8", errors="replace").strip()
-        except OSError:
-            last_text = ""
+        events, usage, event_errors = _parse_jsonl_events(stdout)
 
         if event_errors:
             raise CodexCliError(f"Codex CLI returned turn failure: {event_errors[0]}")
 
-        if not last_text:
-            raise CodexCliError("Codex CLI produced empty final output.")
-
-        return {
-            "structured_output": _parse_final_json(last_text),
-            "usage": usage,
-            "events": events,
-        }
+        if use_schema:
+            # Schema-enforced path: read structured output from --output-last-message file.
+            last_text = ""
+            try:
+                last_text = last_message_path.read_text(encoding="utf-8", errors="replace").strip()  # type: ignore[union-attr]
+            except OSError:
+                last_text = ""
+            if not last_text:
+                raise CodexCliError("Codex CLI produced empty final output.")
+            return {
+                "structured_output": _parse_final_json(last_text),
+                "usage": usage,
+                "events": events,
+            }
+        else:
+            # Schema-free path: extract JSON from agent message text in JSONL events.
+            agent_text = _extract_agent_text_from_events(events)
+            if not agent_text:
+                raise CodexCliError("Codex CLI produced no agent text output.")
+            return {
+                "structured_output": _parse_final_json(agent_text),
+                "usage": usage,
+                "events": events,
+            }
     finally:
-        try:
-            schema_path.unlink(missing_ok=True)
-        except OSError:
-            pass
-        try:
-            last_message_path.unlink(missing_ok=True)
-        except OSError:
-            pass
+        if schema_path is not None:
+            try:
+                schema_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        if last_message_path is not None:
+            try:
+                last_message_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def extract_structured_output(cli_json: Dict[str, Any]) -> Dict[str, Any]:
@@ -167,6 +163,60 @@ def extract_structured_output(cli_json: Dict[str, Any]) -> Dict[str, Any]:
             return out
 
     raise CodexCliError("Could not extract structured_output from Codex CLI JSON.")
+
+
+def _parse_jsonl_events(stdout: str) -> tuple:
+    """Parse JSONL output from Codex CLI into (events, usage, errors)."""
+    events: List[Dict[str, Any]] = []
+    usage: Dict[str, Any] = {}
+    event_errors: List[str] = []
+    for line in stdout.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            event = json.loads(stripped)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        events.append(event)
+        if event.get("type") == "turn.completed":
+            u = event.get("usage")
+            if isinstance(u, dict):
+                usage = u
+        if event.get("type") == "error":
+            msg = event.get("message")
+            if isinstance(msg, str) and msg.strip():
+                event_errors.append(msg.strip())
+        if event.get("type") == "turn.failed":
+            err = event.get("error")
+            if isinstance(err, dict):
+                msg = err.get("message")
+                if isinstance(msg, str) and msg.strip():
+                    event_errors.append(msg.strip())
+    return events, usage, event_errors
+
+
+def _extract_agent_text_from_events(events: List[Dict[str, Any]]) -> str:
+    """Extract agent message text from Codex JSONL events (schema-free path).
+
+    Without ``--output-schema``, the model's response appears in
+    ``item.completed`` events where ``item.type == "agent_message"``.
+    Returns the text from the last such event.
+    """
+    last_text = ""
+    for event in events:
+        if event.get("type") != "item.completed":
+            continue
+        item = event.get("item")
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "agent_message":
+            text = item.get("text", "")
+            if isinstance(text, str) and text.strip():
+                last_text = text.strip()
+    return last_text
 
 
 def _parse_final_json(text: str) -> Dict[str, Any]:

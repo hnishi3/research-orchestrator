@@ -136,12 +136,52 @@ def test_codex_cli_schema_normalizes_required_keys(monkeypatch: pytest.MonkeyPat
     assert captured["schema_obj"]["required"] == ["ok"]
 
 
+def test_codex_cli_runner_no_schema_extracts_from_events(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Schema-free path: json_schema=None skips --output-schema and extracts JSON from JSONL events."""
+    ws = tmp_path / "ws"
+    ws.mkdir()
+
+    captured: Dict[str, Any] = {}
+
+    def fake_run(cmd, **kwargs):  # noqa: ANN001
+        captured["cmd"] = cmd
+        # Simulate JSONL output with agent_message containing JSON
+        stdout = "\n".join(
+            [
+                '{"type":"thread.started"}',
+                json.dumps({
+                    "type": "item.completed",
+                    "item": {"type": "agent_message", "text": '{"aligned": true, "drift_summary": null}'},
+                }),
+                '{"type":"turn.completed","usage":{"total_tokens":55}}',
+            ]
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr("resorch.providers.codex_cli.subprocess.run", fake_run)
+
+    out = run_codex_exec_print_json(
+        prompt="Check alignment.",
+        json_schema=None,
+        workspace_dir=ws,
+        config=CodexCliConfig(model="gpt-5.2"),
+    )
+
+    assert out["structured_output"]["aligned"] is True
+    assert out["structured_output"]["drift_summary"] is None
+    assert out["usage"]["total_tokens"] == 55
+    assert "--output-schema" not in captured["cmd"]
+    assert "--output-last-message" not in captured["cmd"]
+    assert "--json" in captured["cmd"]
+    assert "--ephemeral" in captured["cmd"]
+
+
 def test_codex_cli_review_job(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     ledger, project = _make_tmp_repo(tmp_path)
 
     def fake_codex(*, prompt, json_schema, workspace_dir, config):  # noqa: ANN001
         assert "Review request JSON" in prompt
-        assert json_schema["type"] == "object"
+        assert json_schema is None  # schema text embedded in prompt, not passed as flag
         assert workspace_dir == Path(project["repo_path"]).resolve()
         return {
             "structured_output": {

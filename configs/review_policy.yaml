@@ -28,9 +28,9 @@ visual_inspection:
 #   reformatter: { provider: openai, model: gpt-5.2 }
 #
 # Alternative B — Codex CLI only (subscription, no API cost, no Claude Code CLI needed):
-#   primary:  { provider: codex_cli, model: gpt-5.2, reasoning_effort: medium }
-#   escalation: { provider: codex_cli, model: gpt-5.2, reasoning_effort: medium }
-#   reformatter: { provider: codex_cli, model: gpt-5.2, reasoning_effort: medium }
+#   primary:  { provider: codex_cli, model: gpt-5.2, reasoning_effort: high }
+#   escalation: { provider: codex_cli, model: gpt-5.2, reasoning_effort: high }
+#   reformatter: { provider: codex_cli, model: gpt-5.2, reasoning_effort: high }
 reviewers:
   primary:
     provider: claude_code_cli
@@ -101,7 +101,7 @@ soft_triggers:
     max_total_tokens: 200000
 
 # Cheap drift check before calling the Planner (fail-open on errors).
-# Codex CLI: { provider: codex_cli, model: gpt-5.2, reasoning_effort: medium }
+# Codex CLI: { provider: codex_cli, model: gpt-5.2, reasoning_effort: high }
 goal_alignment:
   enabled: true
   provider: claude_code_cli   # "claude_code_cli" | "codex_cli" | "anthropic"
@@ -110,7 +110,7 @@ goal_alignment:
   compare_with: objective
 
 # Post-experiment sanity checker (runs after successful shell_exec and scoreboard exists).
-# Codex CLI: { provider: codex_cli, model: gpt-5.2, reasoning_effort: medium }
+# Codex CLI: { provider: codex_cli, model: gpt-5.2, reasoning_effort: high }
 interpretation_challenger:
   enabled: true
   provider: claude_code_cli   # "claude_code_cli" | "codex_cli" | "anthropic"

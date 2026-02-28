@@ -164,9 +164,18 @@ review:
 planner:
   provider: codex_cli
   model: gpt-5.2
-  reasoning_effort: medium          # low | medium | high | xhigh
+  reasoning_effort: high           # low | medium | high | xhigh
   max_actions: 6
 ```
+
+**Codex CLI structured output note**: resorch intentionally does **not** use Codex CLI's `--output-schema` flag. OpenAI's server-side constrained decoding (context-free grammar) adds extreme latency for complex schemas — up to **43x slower** than prompt-based JSON generation. Instead, the JSON schema is embedded in the prompt text and the response is parsed via `extract_json_object()`. GPT-5.2 reliably returns valid JSON when the schema is described in the prompt.
+
+| Condition | Planner latency |
+|-----------|----------------|
+| `--output-schema` + reasoning `high` | ~36 min |
+| `--output-schema` + reasoning `medium` | ~38 min |
+| No `--output-schema` + reasoning `high` | **~50 sec** |
+| Claude Code CLI `--json-schema` | ~6 min |
 
 Override per-project via `--config` flag or by placing a copy in `workspaces/<id>/configs/agent_loop.yaml`.
 
@@ -228,17 +237,17 @@ pre_exec_review:
 **Codex-only example** (all reviewers and guardrails via Codex CLI):
 ```yaml
 reviewers:
-  primary:  { provider: codex_cli, model: gpt-5.2, reasoning_effort: medium }
-  escalation: { provider: codex_cli, model: gpt-5.2, reasoning_effort: medium }
-  reformatter: { provider: codex_cli, model: gpt-5.2, reasoning_effort: medium }
+  primary:  { provider: codex_cli, model: gpt-5.2, reasoning_effort: high }
+  escalation: { provider: codex_cli, model: gpt-5.2, reasoning_effort: high }
+  reformatter: { provider: codex_cli, model: gpt-5.2, reasoning_effort: high }
 goal_alignment:
   provider: codex_cli
   model: gpt-5.2
-  reasoning_effort: medium
+  reasoning_effort: high
 interpretation_challenger:
   provider: codex_cli
   model: gpt-5.2
-  reasoning_effort: medium
+  reasoning_effort: high
 pre_exec_review:
   provider: codex_cli
   model: gpt-5.2

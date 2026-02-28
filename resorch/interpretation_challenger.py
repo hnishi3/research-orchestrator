@@ -215,10 +215,12 @@ def _call_codex_cli(*, prompt: str, model: str, system_prompt: str, workspace_di
         sandbox="danger-full-access",
         config_overrides=overrides,
     )
-    prompt_full = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+    schema_text = json.dumps(CHALLENGER_SCHEMA, ensure_ascii=False, indent=2)
+    prompt_with_schema = f"{prompt}\n\nJSON Schema:\n{schema_text}"
+    prompt_full = f"{system_prompt}\n\n{prompt_with_schema}" if system_prompt else prompt_with_schema
     cli_json = run_codex_exec_print_json(
         prompt=prompt_full,
-        json_schema=CHALLENGER_SCHEMA,
+        json_schema=None,  # schema text in prompt; skip --output-schema for speed
         workspace_dir=workspace_dir,
         config=cfg,
     )

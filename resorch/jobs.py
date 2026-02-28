@@ -1296,9 +1296,11 @@ def _run_claude_code_cli_job(*, ledger: Ledger, job_id: str) -> Dict[str, Any]:
     research_ctx = _build_research_context_section(ws) if is_code_review else ""
     challenger_section = _build_challenger_section(spec)
 
+    schema_text = json.dumps(schema_obj, ensure_ascii=False, indent=2)
     user_msg = (
-        "Return ONLY a single JSON object that conforms to the provided JSON Schema.\n"
+        "Return ONLY a single JSON object that conforms to the JSON Schema below.\n"
         "Do not wrap in markdown or code fences.\n\n"
+        f"JSON Schema:\n{schema_text}\n\n"
         "Review request JSON:\n"
         + request_json
         + "\n\n"
@@ -1338,7 +1340,7 @@ def _run_claude_code_cli_job(*, ledger: Ledger, job_id: str) -> Dict[str, Any]:
             )
             cli_json = run_codex_exec_print_json(
                 prompt=f"{system_prompt}\n\n{user_msg}",
-                json_schema=schema_obj,
+                json_schema=None,  # schema text in prompt; skip --output-schema for speed
                 workspace_dir=ws,
                 config=cfg,
             )

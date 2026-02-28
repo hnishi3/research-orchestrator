@@ -125,7 +125,7 @@ def _call_codex_cli(*, prompt: str, model: str, workspace_dir: Optional[Path], r
     )
     cli_json = run_codex_exec_print_json(
         prompt=prompt,
-        json_schema=ALIGNMENT_SCHEMA,
+        json_schema=None,  # schema example already in prompt; skip --output-schema for speed
         workspace_dir=workspace_dir,
         config=cfg,
     )

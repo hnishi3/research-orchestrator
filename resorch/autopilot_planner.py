@@ -962,7 +962,7 @@ def generate_plan_codex(
         try:
             cli_json = run_codex_exec_print_json(
                 prompt=prompt,
-                json_schema=schema,
+                json_schema=None,  # schema text already in prompt; skip --output-schema for speed
                 workspace_dir=workspace,
                 config=cfg,
             )
