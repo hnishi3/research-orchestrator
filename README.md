@@ -14,7 +14,7 @@ to iterate through PDCA (Plan-Do-Check-Act) cycles across multiple research proj
 |------|---------|-----------|
 | Python 3.10+ | Runtime | Yes |
 | [Codex CLI](https://github.com/openai/codex) (`codex`) | Task executor | Yes |
-| `OPENAI_API_KEY` | OpenAI Planner / Reviewer | Yes (if using OpenAI planner) |
+| `OPENAI_API_KEY` | OpenAI Planner / Reviewer | Optional (only if using OpenAI provider) |
 | [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`) | Planner / Reviewer (subscription-based, no API cost) | Optional |
 | `ANTHROPIC_API_KEY` | Anthropic API Reviewer | Optional |
 
@@ -607,7 +607,7 @@ Playbook entries are YAML records of patterns/anti-patterns (trigger, steps, pit
 python mcp_server/server.py --repo-root .
 ```
 
-See `docs/CODEX_MCP_SETUP.md` and `.codex/config.toml.example`.
+See `docs/CODEX_MCP_SETUP.md` for setup instructions.
 
 ### Tests
 
@@ -619,7 +619,6 @@ pytest -q   # 450+ tests
 
 | Path | Description |
 |------|-------------|
-| `SPEC.md` | Full specification and implementation roadmap |
 | `AGENTS.md` | Instructions for Codex in this repo |
 | `configs/agent_loop.yaml` | Planner & review loop config |
 | `configs/review_policy.yaml` | Review triggers, guardrails, multi-layer providers |
@@ -637,10 +636,6 @@ pytest -q   # 450+ tests
 | Doc | Description |
 |-----|-------------|
 | `docs/TOPIC_ENGINE.md` | Topic selection process & stage gates |
-| `docs/MODEL_ORCHESTRATION.md` | Multi-model coordination design |
-| `docs/ERROR_HANDLING.md` | Error handling patterns |
-| `docs/PROVENANCE_AND_CITATIONS.md` | Evidence & citation tracking |
 | `docs/API_WEB_SEARCH.md` | Web search via OpenAI API |
 | `docs/CODEX_MCP_SETUP.md` | MCP server setup for Codex |
 | `docs/RELATED_WORK.md` | Prior work & design takeaways |
-| `docs/PAPER_IDEA.md` | Paper outline & evaluation plan |
