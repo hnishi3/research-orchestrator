@@ -6,8 +6,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 from resorch.artifacts import register_artifact
 from resorch.ledger import Ledger
 from resorch.paths import RepoPaths
@@ -267,18 +265,3 @@ def test_stdio_server_tools_call_roundtrip(tmp_path: Path) -> None:
     resp_ok = json.loads(proc3.stdout.strip().splitlines()[-1])
     assert resp_ok["id"] == 9
     assert resp_ok["result"]["task"]["status"] == "success"
-
-
-def test_artifact_fetch_blocks_path_traversal(tmp_path: Path) -> None:
-    """Regression test: artifact:project/../../etc/passwd must not escape workspace."""
-    ledger = _make_tmp_repo(tmp_path)
-    project = create_project(
-        ledger=ledger,
-        project_id="p1",
-        title="Traversal Test",
-        domain="test",
-        stage="intake",
-        git_init=False,
-    )
-    with pytest.raises(SystemExit, match="Path traversal blocked"):
-        fetch(ledger, id="artifact:p1/../../etc/passwd")

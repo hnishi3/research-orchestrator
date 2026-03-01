@@ -4,12 +4,7 @@ This repo includes a lightweight MCP-ish stdio server at:
 - `mcp_server/server.py`
 
 ## Option A: Project-scoped config (recommended)
-1) Create `.codex/config.toml` in the repository root:
-   ```toml
-   [mcp_servers.resorch]
-   command = "python"
-   args = ["mcp_server/server.py", "--repo-root", "<REPO_ROOT>"]
-   ```
+1) Copy `./.codex/config.toml.example` to `./.codex/config.toml`
 2) Replace `<REPO_ROOT>` with the absolute path to this repo
 3) Ensure the project is marked as trusted in Codex
 

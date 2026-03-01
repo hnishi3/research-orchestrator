@@ -3,6 +3,7 @@
 ## 2026-02-08: PDCA Cycle Fixes (9 issues)
 
 Based on observations from the `structbio-opus-free` agent run (steps 000-012, ~20 hours).
+Full investigation: see `memory/pdca_findings_v2.md`.
 
 ### CRITICAL
 

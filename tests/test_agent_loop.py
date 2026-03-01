@@ -175,13 +175,6 @@ def test_agent_loop_lightweight_retry_schedules_rerun_and_skips_planner(monkeypa
     monkeypatch.setattr("resorch.agent_loop.create_job", fake_create_job)
     monkeypatch.setattr("resorch.agent_loop.run_job", fake_run_job)
     monkeypatch.setattr("resorch.agent_loop.list_tasks", lambda *_args, **_kwargs: [])
-    monkeypatch.setattr("resorch.agent_loop.create_task", lambda **kwargs: {
-        "id": f"fix{kwargs.get('spec', {}).get('finding_index', 0)}",
-        "type": "review_fix", "status": "created", "spec": kwargs.get("spec", {}),
-    })
-    monkeypatch.setattr("resorch.agent_loop.run_task", lambda **kwargs: {
-        "task": {"id": kwargs.get("task", {}).get("id", "fix0"), "type": "review_fix", "status": "success"},
-    })
 
     out = run_agent_loop(
         ledger=ledger,
@@ -398,13 +391,6 @@ def test_agent_loop_lightweight_retry_max_consecutive(monkeypatch: pytest.Monkey
     monkeypatch.setattr("resorch.agent_loop.create_job", fake_create_job)
     monkeypatch.setattr("resorch.agent_loop.run_job", fake_run_job)
     monkeypatch.setattr("resorch.agent_loop.list_tasks", lambda *_args, **_kwargs: [])
-    monkeypatch.setattr("resorch.agent_loop.create_task", lambda **kwargs: {
-        "id": f"fix{kwargs.get('spec', {}).get('finding_index', 0)}",
-        "type": "review_fix", "status": "created", "spec": kwargs.get("spec", {}),
-    })
-    monkeypatch.setattr("resorch.agent_loop.run_task", lambda **kwargs: {
-        "task": {"id": kwargs.get("task", {}).get("id", "fix0"), "type": "review_fix", "status": "success"},
-    })
 
     out = run_agent_loop(
         ledger=ledger,

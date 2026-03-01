@@ -890,7 +890,7 @@ def run_agent_loop(
 
             created_at = utc_now_iso()
             if not targets:
-                log.warning("Review skipped: no targets available (step %d).", step_idx)
+                log.warning("Review skipped: no targets available (step %d).", step_num)
                 step_record["review_skipped"] = "empty_targets"
             else:
                 job = create_job(
