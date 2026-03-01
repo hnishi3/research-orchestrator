@@ -129,6 +129,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_init = sub.add_parser("init", help="Initialize local state (.orchestrator/ledger.db, logs, workspaces/)")
     p_init.set_defaults(_handler="init")
 
+    p_doctor = sub.add_parser("doctor", help="Diagnose environment and configuration")
+    p_doctor.set_defaults(_handler="doctor")
+
     p_proj = sub.add_parser("project", help="Project commands")
     proj_sub = p_proj.add_subparsers(dest="subcmd", required=True)
 
@@ -716,6 +719,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args._handler == "init":
         ledger.init()
         print(f"Initialized: {paths.db_path}")
+        return 0
+
+    if args._handler == "doctor":
+        from resorch.doctor import print_doctor_summary, run_doctor
+
+        result = run_doctor(repo_root=paths.root)
+        print_doctor_summary(result)
+        _print_json(result)
         return 0
 
     ledger.init()
