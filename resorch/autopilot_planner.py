@@ -69,6 +69,7 @@ def _default_planner_context_files(workspace: Path) -> List[str]:
         "notes/stagnation_report.md",
         "notes/exploration_log.md",
         "reviews/last_review_summary.md",
+        "reviews/finding_recurrence.md",
         "paper/manuscript.md",
         "notes/autopilot/verifier_last.md",
         "notes/autopilot/verifier_last.json",
@@ -373,13 +374,19 @@ def _build_planner_prompt(
             + _review_section.strip()
             + "\n\n"
             "YOUR OBLIGATIONS:\n"
-            "- Your plan MUST address every major finding listed above.\n"
-            "- In the 'notes' field, explain how each major finding is handled.\n"
+            "- Triage findings by their 'resolvability' field:\n"
+            "  * fixable → Your plan MUST address these directly (script fix,\n"
+            "    additional experiment, data correction).\n"
+            "  * requires_pivot → Set should_stop=true and explain what the\n"
+            "    human PI needs to decide. Do NOT apply incremental patches.\n"
+            "  * inherent_limitation → Do NOT attempt to fix. Instead, add an\n"
+            "    action to acknowledge it in the Discussion/Limitations section\n"
+            "    of the manuscript. Stop re-attempting failed solutions.\n"
+            "  * (no resolvability field) → Treat as fixable.\n"
+            "- In the 'notes' field, explain how each major finding is handled\n"
+            "  and cite its resolvability classification.\n"
             "- Do NOT plan new experiments on the current approach until the\n"
-            "  methodology issues above are resolved or explicitly reframed.\n"
-            "- If the findings require fundamental changes that cannot be done\n"
-            "  in one iteration, set should_stop=true and explain what the\n"
-            "  human PI needs to decide.\n"
+            "  fixable methodology issues above are resolved.\n"
             "============================================================\n\n"
         )
     elif _review_section.strip():

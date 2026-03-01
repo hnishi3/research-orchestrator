@@ -149,6 +149,53 @@ def write_review_request(
     }
 
 
+def _update_finding_recurrence(reviews_dir: Path) -> None:
+    """Build reviews/finding_recurrence.md from all RESP files.
+
+    Scans every RESP-*.json in ``reviews_dir``, groups major/blocker
+    findings by category, and writes a human-readable recurrence tracker.
+    Both Planner and Reviewer can use this to identify inherent limitations
+    that keep recurring without resolution.
+    """
+    resp_files = sorted(reviews_dir.glob("RESP-*.json"))
+    by_category: Dict[str, List[tuple]] = {}  # category -> [(source, message, resolvability)]
+    for rp in resp_files:
+        try:
+            data = json.loads(rp.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        for f in data.get("findings") or []:
+            if not isinstance(f, dict):
+                continue
+            sev = str(f.get("severity") or "").lower()
+            if sev not in ("major", "blocker"):
+                continue
+            cat = str(f.get("category") or "other")
+            msg = str(f.get("message") or "").strip()[:200]
+            resolv = str(f.get("resolvability") or "unset")
+            by_category.setdefault(cat, []).append((rp.name, msg, resolv))
+
+    lines = ["# Finding Recurrence Tracker\n\n"]
+    lines.append("Major/blocker findings across all review iterations, grouped by category.\n")
+    lines.append("Findings appearing 4+ times are likely inherent_limitation.\n\n")
+    for cat in sorted(by_category.keys()):
+        entries = by_category[cat]
+        lines.append(f"## {cat} ({len(entries)} occurrences)\n")
+        for source, msg, resolv in entries:
+            lines.append(f"- [{resolv}] {msg} ({source})\n")
+        if len(entries) >= 4:
+            lines.append(
+                f"\n**WARNING: {cat} has {len(entries)} occurrences across reviews"
+                " — strongly consider classifying as inherent_limitation**\n"
+            )
+        lines.append("\n")
+
+    if not by_category:
+        lines.append("No major/blocker findings recorded yet.\n")
+
+    (reviews_dir / "finding_recurrence.md").write_text("".join(lines), encoding="utf-8")
+
+
 def ingest_review_result(*, ledger: Ledger, result_path: Path, reviews_rel: str = "reviews", create_fix_tasks: str = "all") -> Dict[str, Any]:
     raw = json.loads(result_path.read_text(encoding="utf-8"))
     project_id = raw.get("project_id")
@@ -172,13 +219,17 @@ def ingest_review_result(*, ledger: Ledger, result_path: Path, reviews_rel: str 
         raise SystemExit("reviews_rel must stay within the workspace.") from e
     reviews_dir.mkdir(parents=True, exist_ok=True)
 
-    uid = uuid4().hex[:6]
-    dest_name = f"RESP-{stage}-{_today_ymd()}-{uid}-{reviewer}.json"
-    dest_path = reviews_dir / dest_name
-
-    # Ensure the stored artifact is always under the workspace.
-    if result_path.resolve() != dest_path.resolve():
-        shutil.copy2(result_path, dest_path)
+    # If result_path is already inside reviews_dir (e.g. written by _run_*_job),
+    # reuse it directly instead of creating a duplicate copy with a new UUID.
+    try:
+        result_path.resolve().relative_to(reviews_dir)
+        dest_path = result_path
+    except ValueError:
+        uid = uuid4().hex[:6]
+        dest_name = f"RESP-{stage}-{_today_ymd()}-{uid}-{reviewer}.json"
+        dest_path = reviews_dir / dest_name
+        if result_path.resolve() != dest_path.resolve():
+            shutil.copy2(result_path, dest_path)
 
     review_id = uuid4().hex
     review = ledger.insert_review(
@@ -205,7 +256,10 @@ def ingest_review_result(*, ledger: Ledger, result_path: Path, reviews_rel: str 
     findings = raw.get("findings") or []
     severity_counts: Dict[str, int] = {}
     category_counts: Dict[str, int] = {}
+    resolvability_counts: Dict[str, int] = {}
     blockers: List[str] = []
+    limitations: List[str] = []
+    pivots: List[str] = []
     if isinstance(findings, list):
         for f in findings:
             if not isinstance(f, dict):
@@ -214,10 +268,21 @@ def ingest_review_result(*, ledger: Ledger, result_path: Path, reviews_rel: str 
             cat = str(f.get("category") or "unknown")
             severity_counts[sev] = severity_counts.get(sev, 0) + 1
             category_counts[cat] = category_counts.get(cat, 0) + 1
+            resolv = f.get("resolvability")
+            if resolv:
+                resolvability_counts[str(resolv)] = resolvability_counts.get(str(resolv), 0) + 1
             if sev == "blocker":
                 msg = str(f.get("message") or "").strip()
                 if msg:
                     blockers.append(msg)
+            if resolv == "inherent_limitation" and sev in ("major", "blocker"):
+                msg = str(f.get("message") or "").strip()
+                if msg:
+                    limitations.append(msg)
+            if resolv == "requires_pivot" and sev in ("major", "blocker"):
+                msg = str(f.get("message") or "").strip()
+                if msg:
+                    pivots.append(msg)
 
     summary_lines: List[str] = []
     summary_lines.append("# Last Review Summary\n\n")
@@ -241,6 +306,10 @@ def ingest_review_result(*, ledger: Ledger, result_path: Path, reviews_rel: str 
         summary_lines.append("- By category:\n")
         for k in sorted(category_counts.keys()):
             summary_lines.append(f"  - {k}: {category_counts[k]}\n")
+    if resolvability_counts:
+        summary_lines.append("- By resolvability:\n")
+        for k in sorted(resolvability_counts.keys()):
+            summary_lines.append(f"  - {k}: {resolvability_counts[k]}\n")
     summary_lines.append("\n")
 
     if blockers:
@@ -249,8 +318,24 @@ def ingest_review_result(*, ledger: Ledger, result_path: Path, reviews_rel: str 
             summary_lines.append(f"{idx}. {msg}\n")
         summary_lines.append("\n")
 
+    if limitations:
+        summary_lines.append("### Inherent Limitations (do NOT attempt to fix — acknowledge in Discussion)\n")
+        for idx, msg in enumerate(limitations[:10], start=1):
+            summary_lines.append(f"{idx}. {msg}\n")
+        summary_lines.append("\n")
+
+    if pivots:
+        summary_lines.append("### Requires Pivot (fundamental design change needed — consult PI)\n")
+        for idx, msg in enumerate(pivots[:10], start=1):
+            summary_lines.append(f"{idx}. {msg}\n")
+        summary_lines.append("\n")
+
     summary_path = reviews_dir / "last_review_summary.md"
     summary_path.write_text("".join(summary_lines), encoding="utf-8")
+
+    # Update the finding recurrence tracker across all reviews.
+    _update_finding_recurrence(reviews_dir)
+
     summary_artifact = register_artifact(
         ledger=ledger,
         project=project,

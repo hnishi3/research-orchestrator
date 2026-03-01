@@ -81,6 +81,19 @@
               "days"
             ]
           },
+          "resolvability": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              null,
+              "fixable",
+              "requires_pivot",
+              "inherent_limitation"
+            ],
+            "description": "Whether this finding can be fixed in-place, requires a fundamental design change, or is an inherent limitation to acknowledge in the manuscript"
+          },
           "evidence": {
             "type": [
               "string",
