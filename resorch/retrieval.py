@@ -647,6 +647,10 @@ def fetch(ledger: Ledger, *, id: str) -> Dict[str, Any]:
         repo_path = Path(project["repo_path"])
         rel_path = Path(rel)
         abs_path = (repo_path / rel_path).resolve()
+        try:
+            abs_path.relative_to(repo_path.resolve())
+        except ValueError:
+            raise SystemExit(f"Path traversal blocked: artifact path escapes workspace: {id}")
         content = _safe_read_text(abs_path)
         if content is None:
             raise SystemExit(f"Artifact not readable as text: {abs_path}")

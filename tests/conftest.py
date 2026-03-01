@@ -5,14 +5,14 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
-from resorch.ledger import Ledger
-from resorch.paths import RepoPaths
-
 # Ensure the repo root (which contains the `resorch/` package) is importable under
 # pytest's import modes.
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+from resorch.ledger import Ledger  # noqa: E402
+from resorch.paths import RepoPaths  # noqa: E402
 
 
 def make_tmp_repo(tmp_path: Path) -> Ledger:
