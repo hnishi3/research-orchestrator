@@ -37,6 +37,20 @@ The entry point is the `./orchestrator` script at the repo root. No `pip install
   --max-steps 5
 ```
 
+### Dry run (plan only, no execution)
+
+```bash
+# Generates a plan but skips task execution and review.
+# Requires Planner access (Claude CLI or OPENAI_API_KEY) but not Codex CLI.
+./orchestrator agent run \
+  --project my-research \
+  --objective "Implement baseline and evaluate on test set." \
+  --max-steps 1 \
+  --dry-run
+```
+
+The plan JSON is saved under `notes/autopilot/` in the project workspace.
+
 ## Workspace Structure
 
 `./orchestrator project new` creates a workspace under `workspaces/<project_id>/`:

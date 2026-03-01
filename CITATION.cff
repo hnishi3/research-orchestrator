@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Research-Orchestrator"
+authors:
+  - family-names: "Nishi"
+    given-names: "Hafumi"
+version: "0.1.0"
+license: MIT
+repository-code: "https://github.com/hnishi3/research-orchestrator"
+keywords:
+  - research
+  - agent
+  - llm
+  - orchestrator
+  - pdca
