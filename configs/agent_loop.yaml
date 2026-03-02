@@ -37,3 +37,6 @@ review:
     - What are the top 1-3 highest-information next experiments, and why?
     - Any missing baselines/ablations or reproducibility/safety risks?
     - If we should pivot, propose 3 alternatives with minimal experiments.
+
+# executor:
+#   shell_init: "source /data/anaconda3/etc/profile.d/conda.sh && conda activate myenv"

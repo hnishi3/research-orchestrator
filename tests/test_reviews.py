@@ -223,7 +223,7 @@ def test_resolvability_appears_in_summary(tmp_path: Path) -> None:
 
 
 def test_finding_recurrence_tracker(tmp_path: Path) -> None:
-    """finding_recurrence.md is generated and flags 4+ occurrences."""
+    """finding_recurrence.md counts distinct reviews, not raw findings."""
     reviews_dir = tmp_path / "reviews"
     reviews_dir.mkdir()
 
@@ -250,9 +250,55 @@ def test_finding_recurrence_tracker(tmp_path: Path) -> None:
     _update_finding_recurrence(reviews_dir)
 
     tracker = (reviews_dir / "finding_recurrence.md").read_text(encoding="utf-8")
-    assert "method (5 occurrences)" in tracker
+    # Count is now "N/M reviews", not "N occurrences"
+    assert "5/5 reviews" in tracker
+    assert "5 unique findings" in tracker
     assert "WARNING" in tracker
     assert "inherent_limitation" in tracker
+
+
+def test_finding_recurrence_dedup_and_review_count(tmp_path: Path) -> None:
+    """Duplicate messages are collapsed; review count is distinct RESP files."""
+    reviews_dir = tmp_path / "reviews"
+    reviews_dir.mkdir()
+
+    # 3 RESP files. Two have identical messages, one has 2 method findings.
+    for i in range(3):
+        findings = [
+            {
+                "severity": "major", "category": "method",
+                "message": "RSA confound",
+                "target_paths": ["notes/method.md"],
+                "resolvability": "inherent_limitation",
+            },
+        ]
+        if i == 2:
+            # Extra finding in same RESP — should not inflate review count.
+            findings.append({
+                "severity": "major", "category": "method",
+                "message": "Missing baseline",
+                "target_paths": ["notes/method.md"],
+                "resolvability": "fixable",
+            })
+        data = {
+            "project_id": "test", "stage": "experiment",
+            "reviewer": "claude_code", "recommendation": "major",
+            "findings": findings,
+        }
+        (reviews_dir / f"RESP-experiment-2026030{i}-uid{i:03d}-cc.json").write_text(
+            json.dumps(data), encoding="utf-8"
+        )
+
+    _update_finding_recurrence(reviews_dir)
+
+    tracker = (reviews_dir / "finding_recurrence.md").read_text(encoding="utf-8")
+    # 3 RESP files contain method findings → "3/3 reviews"
+    assert "3/3 reviews" in tracker
+    # "RSA confound" appears 3 times but deduped to 1 unique finding
+    # "Missing baseline" appears once → 2 unique findings total
+    assert "2 unique findings" in tracker
+    # 3 files total, threshold = max(4, 3//2) = 4 → no WARNING (3 < 4)
+    assert "WARNING" not in tracker
 
 
 def test_finding_recurrence_empty(tmp_path: Path) -> None:

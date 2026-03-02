@@ -79,6 +79,8 @@ from resorch.autopilot_action import (  # noqa: E402
     _render_pre_exec_review_instructions,
     _maybe_inject_pre_exec_review,
     _promote_shell_to_codex,
+    _inject_shell_init,
+    _inject_shell_init_into_codex,
 )
 
 
@@ -520,6 +522,12 @@ def run_autopilot_iteration(
                 log.error("Skipping invalid planned action (%s): %s", task_type, spec_err)
                 continue
             spec_norm = _maybe_inject_pre_exec_review(spec=spec_norm, task_type=task_type, policy=policy)
+            shell_init = (config or {}).get("shell_init")
+            if shell_init:
+                if task_type == "shell_exec":
+                    spec_norm = _inject_shell_init(spec_norm, shell_init)
+                elif task_type == "codex_exec":
+                    spec_norm = _inject_shell_init_into_codex(spec_norm, shell_init)
 
             task = create_task(ledger=ledger, project_id=project_id, task_type=task_type, spec=spec_norm)
             created.append(task)
@@ -551,6 +559,9 @@ def run_autopilot_iteration(
                 log.error("Skipping invalid planned codex_exec action: %s", spec_err)
                 continue
             spec_norm = _maybe_inject_pre_exec_review(spec=spec_norm, task_type="codex_exec", policy=policy)
+            shell_init = (config or {}).get("shell_init")
+            if shell_init:
+                spec_norm = _inject_shell_init_into_codex(spec_norm, shell_init)
             task = create_task(ledger=ledger, project_id=project_id, task_type="codex_exec", spec=spec_norm)
             created.append(task)
             if not dry_run:
@@ -665,6 +676,9 @@ def run_autopilot_iteration(
                 if spec_err:
                     log.error("Skipping invalid planned shell_exec action: %s", spec_err)
                     continue
+                shell_init = (config or {}).get("shell_init")
+                if shell_init:
+                    spec_norm = _inject_shell_init(spec_norm, shell_init)
                 task = create_task(ledger=ledger, project_id=project_id, task_type="shell_exec", spec=spec_norm)
                 created.append(task)
                 if not dry_run:

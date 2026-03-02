@@ -364,3 +364,36 @@ def _promote_shell_to_codex(action: Dict[str, Any]) -> Dict[str, Any]:
         title[:80],
     )
     return out
+
+
+# ---------------------------------------------------------------------------
+# Shell init injection (conda/virtualenv environment activation)
+# ---------------------------------------------------------------------------
+
+
+def _inject_shell_init(spec: Dict[str, Any], shell_init: str) -> Dict[str, Any]:
+    """Prepend *shell_init* to a shell_exec spec's command and force shell=True."""
+    out = dict(spec)
+    cmd = out.get("command", "")
+    if isinstance(cmd, list):
+        cmd = " ".join(str(c) for c in cmd)
+    out["command"] = f"{shell_init} && {cmd}"
+    out["shell"] = True
+    return out
+
+
+def _inject_shell_init_into_codex(spec: Dict[str, Any], shell_init: str) -> Dict[str, Any]:
+    """Append shell environment instructions to a codex_exec prompt."""
+    out = dict(spec)
+    prompt = out.get("prompt", "")
+    out["prompt"] = (
+        prompt.rstrip() + "\n\n"
+        "--- SHELL ENVIRONMENT ---\n"
+        "Before running ANY shell command (Python scripts, pip install, etc.), "
+        "first activate the environment:\n"
+        f"  {shell_init}\n"
+        "Run this activation at the start of every terminal session. "
+        "Do NOT use conda run.\n"
+        "--- END SHELL ENVIRONMENT ---\n"
+    )
+    return out

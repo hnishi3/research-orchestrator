@@ -156,9 +156,16 @@ def _update_finding_recurrence(reviews_dir: Path) -> None:
     findings by category, and writes a human-readable recurrence tracker.
     Both Planner and Reviewer can use this to identify inherent limitations
     that keep recurring without resolution.
+
+    Counts are based on **distinct review files** containing findings in each
+    category rather than raw finding counts, preventing inflation from
+    multiple findings per review.  Exact-duplicate messages are collapsed.
     """
     resp_files = sorted(reviews_dir.glob("RESP-*.json"))
-    by_category: Dict[str, List[tuple]] = {}  # category -> [(source, message, resolvability)]
+    # category -> [(source, message, resolvability)]
+    by_category: Dict[str, List[tuple]] = {}
+    # category -> set of RESP filenames that contain findings
+    sources_by_cat: Dict[str, set] = {}
     for rp in resp_files:
         try:
             data = json.loads(rp.read_text(encoding="utf-8"))
@@ -174,18 +181,40 @@ def _update_finding_recurrence(reviews_dir: Path) -> None:
             msg = str(f.get("message") or "").strip()[:200]
             resolv = str(f.get("resolvability") or "unset")
             by_category.setdefault(cat, []).append((rp.name, msg, resolv))
+            sources_by_cat.setdefault(cat, set()).add(rp.name)
 
+    n_resp = len(resp_files)
     lines = ["# Finding Recurrence Tracker\n\n"]
-    lines.append("Major/blocker findings across all review iterations, grouped by category.\n")
-    lines.append("Findings appearing 4+ times are likely inherent_limitation.\n\n")
+    lines.append(
+        f"Major/blocker findings across {n_resp} review files, grouped by category.\n"
+    )
+    lines.append(
+        "Review count = distinct RESP files containing findings in that category.\n"
+    )
+    lines.append(
+        "Categories flagged in >50% of reviews are likely inherent_limitation.\n\n"
+    )
     for cat in sorted(by_category.keys()):
         entries = by_category[cat]
-        lines.append(f"## {cat} ({len(entries)} occurrences)\n")
+        n_reviews = len(sources_by_cat[cat])
+        # Deduplicate exact-match messages, keep first source
+        seen_msgs: set = set()
+        unique_entries: list = []
         for source, msg, resolv in entries:
+            if msg not in seen_msgs:
+                seen_msgs.add(msg)
+                unique_entries.append((source, msg, resolv))
+        lines.append(
+            f"## {cat} ({n_reviews}/{n_resp} reviews, "
+            f"{len(unique_entries)} unique findings)\n"
+        )
+        for source, msg, resolv in unique_entries:
             lines.append(f"- [{resolv}] {msg} ({source})\n")
-        if len(entries) >= 4:
+        threshold = max(4, n_resp // 2)
+        if n_reviews >= threshold:
+            pct = round(100 * n_reviews / n_resp) if n_resp else 0
             lines.append(
-                f"\n**WARNING: {cat} has {len(entries)} occurrences across reviews"
+                f"\n**WARNING: {cat} flagged in {pct}% of reviews ({n_reviews}/{n_resp})"
                 " — strongly consider classifying as inherent_limitation**\n"
             )
         lines.append("\n")

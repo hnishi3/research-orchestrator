@@ -59,6 +59,7 @@ class AgentLoopConfig:
     max_actions: int = 6
     max_fix_tasks_per_review: int = 10
     review_questions: Optional[List[str]] = None
+    shell_init: Optional[str] = None  # e.g. "source .../conda.sh && conda activate myenv"
 
     @classmethod
     def from_yaml(cls, path: Path) -> "AgentLoopConfig":
@@ -74,6 +75,9 @@ class AgentLoopConfig:
         review = raw.get("review") or {}
         if not isinstance(review, dict):
             review = {}
+        executor = raw.get("executor") or {}
+        if not isinstance(executor, dict):
+            executor = {}
 
         questions = review.get("questions")
         if questions is not None and not isinstance(questions, list):
@@ -88,6 +92,7 @@ class AgentLoopConfig:
             max_actions=int(planner.get("max_actions", cls.max_actions)),
             max_fix_tasks_per_review=int(review.get("max_fix_tasks_per_review", cls.max_fix_tasks_per_review)),
             review_questions=[str(x) for x in (questions or [])] if questions is not None else None,
+            shell_init=str(executor["shell_init"]).strip() if executor.get("shell_init") else None,
         )
 
 
