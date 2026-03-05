@@ -233,8 +233,8 @@ def test_import_ideas_inside_workspace_registers_artifact(tmp_path: Path) -> Non
     assert result["artifact"] is not None
 
 
-def test_score_ideas_outside_workspace_skips_artifact(tmp_path: Path) -> None:
-    """score_ideas with output outside workspace should not crash on artifact registration."""
+def test_score_ideas_outside_workspace_rejects(tmp_path: Path) -> None:
+    """score_ideas with output outside workspace must be rejected before writing."""
     from resorch.ideas import import_ideas_jsonl, score_ideas
 
     ledger, project = _make_project(tmp_path)
@@ -259,21 +259,21 @@ def test_score_ideas_outside_workspace_skips_artifact(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    # Output goes OUTSIDE workspace
+    # Output goes OUTSIDE workspace — must be rejected
     out_path = tmp_path / "outside_ranked.jsonl"
-    result = score_ideas(
-        ledger=ledger,
-        project_id="p1",
-        rubric_path=str(rubric),
-        output_path=str(out_path),
-        register_output_artifact=True,
-    )
-    assert result["count"] == 1
-    assert result["artifact"] is None  # Should skip, not crash
+    with pytest.raises(SystemExit, match="must be within workspace"):
+        score_ideas(
+            ledger=ledger,
+            project_id="p1",
+            rubric_path=str(rubric),
+            output_path=str(out_path),
+            register_output_artifact=True,
+        )
+    assert not out_path.exists(), "File must not be written outside workspace"
 
 
-def test_dedupe_ideas_outside_workspace_skips_artifact(tmp_path: Path) -> None:
-    """dedupe_ideas_jsonl with output outside workspace should not crash."""
+def test_dedupe_ideas_outside_workspace_rejects(tmp_path: Path) -> None:
+    """dedupe_ideas_jsonl with output outside workspace must be rejected."""
     from resorch.ideas import dedupe_ideas_jsonl, import_ideas_jsonl
 
     ledger, project = _make_project(tmp_path)
@@ -287,16 +287,38 @@ def test_dedupe_ideas_outside_workspace_skips_artifact(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    # Output goes OUTSIDE workspace
+    # Output goes OUTSIDE workspace — must be rejected
     out_path = tmp_path / "outside_deduped.jsonl"
-    result = dedupe_ideas_jsonl(
-        ledger=ledger,
-        project_id="p1",
-        input_path=str(ideas_file),
-        output_path=str(out_path),
-        register_output_artifacts=True,
-    )
-    assert result["before"] >= 1
-    # Artifacts should be None (skipped), not crash
-    assert result.get("artifact_out") is None
-    assert result.get("artifact_map") is None
+    with pytest.raises(SystemExit, match="must be within workspace"):
+        dedupe_ideas_jsonl(
+            ledger=ledger,
+            project_id="p1",
+            input_path=str(ideas_file),
+            output_path=str(out_path),
+            register_output_artifacts=True,
+        )
+    assert not out_path.exists(), "File must not be written outside workspace"
+
+
+def test_artifact_within_accepts_symlinked_dir(tmp_path: Path) -> None:
+    """_within() should accept files under a symlinked directory inside workspace."""
+    from resorch.artifacts import _within
+
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    real_data = tmp_path / "real_data"
+    real_data.mkdir()
+    (real_data / "file.txt").write_text("data", encoding="utf-8")
+    (ws / "data").symlink_to(real_data)
+
+    # Logical path is inside workspace, even though symlink target is outside
+    assert _within(ws / "data" / "file.txt", ws)
+
+
+def test_artifact_within_rejects_outside(tmp_path: Path) -> None:
+    """_within() should reject paths genuinely outside workspace."""
+    from resorch.artifacts import _within
+
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    assert not _within(tmp_path / "outside" / "file.txt", ws)

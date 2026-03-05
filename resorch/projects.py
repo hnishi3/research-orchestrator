@@ -353,6 +353,10 @@ def set_project_stage(ledger: Ledger, project_id: str, stage: str) -> Dict[str, 
 # Directories to inherit (relative to workspace root).
 _INHERIT_DIRS = ("data", "src", "configs")
 
+# Directories inherited via symlink (large, read-mostly).
+# Everything else in _INHERIT_DIRS is copied so the successor can modify freely.
+_SYMLINK_DIRS: frozenset = frozenset({"data"})
+
 
 def _generate_predecessor_summary(pred_workspace: Path) -> str:
     """Build a compact summary of the predecessor project for Planner context.
@@ -447,9 +451,10 @@ def create_successor_project(
     )
     new_workspace = Path(new_project["repo_path"])
 
-    # --- Inherit directories via symlink ---
+    # --- Inherit directories (symlink for data, copy for src/configs) ---
     dirs_to_inherit = inherit if inherit is not None else list(_INHERIT_DIRS)
     inherited: List[str] = []
+    inherit_methods: Dict[str, str] = {}
     for dirname in dirs_to_inherit:
         # Validate: no absolute paths, no '..' traversal
         dirname = str(dirname).strip()
@@ -469,12 +474,24 @@ def create_successor_project(
             continue
         dst = new_workspace / dirname
         if dst.exists():
-            # Template might have created an empty dir — remove it.
             if dst.is_dir() and not any(dst.iterdir()):
+                # Template created an empty dir — remove it so symlink/copy can proceed.
                 dst.rmdir()
-            else:
+            elif dst.is_dir() and dirname not in _SYMLINK_DIRS:
+                # Merge predecessor files into existing directory.
+                shutil.copytree(src, dst, dirs_exist_ok=True)
+                inherit_methods[dirname] = "copy"
+                inherited.append(dirname)
                 continue
-        dst.symlink_to(src.resolve())
+            else:
+                log.warning("Cannot inherit %s: destination exists", dirname)
+                continue
+        if dirname in _SYMLINK_DIRS:
+            dst.symlink_to(src.resolve())
+            inherit_methods[dirname] = "symlink"
+        else:
+            shutil.copytree(src, dst)
+            inherit_methods[dirname] = "copy"
         inherited.append(dirname)
 
     # --- Generate predecessor_summary.md ---
@@ -488,6 +505,7 @@ def create_successor_project(
         "id": predecessor_id,
         "title": pred["title"],
         "inherited_dirs": inherited,
+        "inherit_methods": inherit_methods,
         "created_at": utc_now_iso(),
     }
     # Write updated meta back to the database.

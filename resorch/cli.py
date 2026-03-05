@@ -176,7 +176,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--inherit",
         nargs="*",
         default=None,
-        help="Directories to inherit via symlink (default: data src configs)",
+        help="Directories to inherit from predecessor (default: data src configs). "
+             "data is symlinked; src and configs are copied.",
     )
     p_proj_successor.add_argument(
         "--git-init",

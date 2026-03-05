@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from resorch.artifacts import register_artifact
 from resorch.ledger import Ledger
+from resorch.paths import resolve_within_workspace
 from resorch.utils import utc_now_iso
 
 
@@ -98,9 +99,7 @@ def add_evidence(
 
     evidence_id = uuid4().hex
     rel_out = output_path or f"evidence/{evidence_id}.json"
-    out_p = Path(rel_out)
-    if not out_p.is_absolute():
-        out_p = (workspace / out_p).resolve()
+    out_p = resolve_within_workspace(workspace, rel_out, label="evidence output path")
     out_p.parent.mkdir(parents=True, exist_ok=True)
 
     meta_out = dict(meta) if meta else {}

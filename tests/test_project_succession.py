@@ -175,7 +175,7 @@ class TestCreateSuccessorProject:
         assert data_link.is_symlink()
         assert (data_link / "features.parquet").exists()
 
-    def test_inherits_src_via_symlink(self, tmp_path: Path) -> None:
+    def test_inherits_src_via_copy(self, tmp_path: Path) -> None:
         ledger = _make_ledger(tmp_path)
         _make_predecessor(ledger)
         result = create_successor_project(
@@ -185,9 +185,10 @@ class TestCreateSuccessorProject:
             git_init=False,
         )
         ws = Path(result["repo_path"])
-        src_link = ws / "src"
-        assert src_link.is_symlink()
-        assert (src_link / "01_analysis.py").exists()
+        src_dir = ws / "src"
+        assert not src_dir.is_symlink(), "src should be copied, not symlinked"
+        assert src_dir.is_dir()
+        assert (src_dir / "01_analysis.py").exists()
 
     def test_predecessor_summary_created(self, tmp_path: Path) -> None:
         ledger = _make_ledger(tmp_path)
@@ -271,6 +272,10 @@ class TestCreateSuccessorProject:
         assert fetched["meta"]["predecessor"]["id"] == "pred-alpha"
         assert fetched["meta"]["predecessor"]["title"] == "Predecessor Alpha"
         assert "data" in fetched["meta"]["predecessor"]["inherited_dirs"]
+        methods = fetched["meta"]["predecessor"]["inherit_methods"]
+        assert methods["data"] == "symlink"
+        assert methods.get("src") == "copy"
+        # configs is only inherited if it exists in predecessor (not created by _make_predecessor)
 
     def test_standard_template_files_present(self, tmp_path: Path) -> None:
         ledger = _make_ledger(tmp_path)
@@ -288,3 +293,41 @@ class TestCreateSuccessorProject:
         assert (ws / "notes" / "analysis_digest.md").exists()
         assert (ws / "results" / "scoreboard.json").exists()
         assert (ws / "paper" / "manuscript.md").exists()
+
+    def test_src_copy_isolates_predecessor(self, tmp_path: Path) -> None:
+        """Writing to successor's src/ must NOT modify predecessor's src/."""
+        ledger = _make_ledger(tmp_path)
+        pred = _make_predecessor(ledger)
+        pred_ws = Path(pred["repo_path"])
+        result = create_successor_project(
+            ledger=ledger,
+            predecessor_id="pred-alpha",
+            project_id="succ-isolate",
+            git_init=False,
+        )
+        ws = Path(result["repo_path"])
+        # Write a new file in successor's src/
+        (ws / "src" / "new_file.py").write_text("# new", encoding="utf-8")
+        # Predecessor should NOT have this file
+        assert not (pred_ws / "src" / "new_file.py").exists()
+
+    def test_configs_inherited_via_copy(self, tmp_path: Path) -> None:
+        ledger = _make_ledger(tmp_path)
+        pred = _make_predecessor(ledger)
+        pred_ws = Path(pred["repo_path"])
+        # Create a config file in predecessor
+        (pred_ws / "configs").mkdir(parents=True, exist_ok=True)
+        (pred_ws / "configs" / "test.yaml").write_text("key: value\n", encoding="utf-8")
+        result = create_successor_project(
+            ledger=ledger,
+            predecessor_id="pred-alpha",
+            project_id="succ-cfg",
+            git_init=False,
+        )
+        ws = Path(result["repo_path"])
+        cfg_dir = ws / "configs"
+        assert not cfg_dir.is_symlink(), "configs should be copied, not symlinked"
+        assert (cfg_dir / "test.yaml").exists()
+        # Modifying successor's config must not touch predecessor
+        (cfg_dir / "test.yaml").write_text("key: changed\n", encoding="utf-8")
+        assert (pred_ws / "configs" / "test.yaml").read_text() == "key: value\n"

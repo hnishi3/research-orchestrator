@@ -8,6 +8,7 @@ from resorch.artifacts import register_artifact
 from resorch.ideas import get_idea as get_idea_fn
 from resorch.ideas import set_idea_status as set_idea_status_fn
 from resorch.ledger import Ledger
+from resorch.paths import resolve_within_workspace
 
 
 def _parse_smoke_test_row(row: Dict[str, Any]) -> Dict[str, Any]:
@@ -56,9 +57,7 @@ def ingest_smoke_test_result(
         raise SystemExit(f"Idea {idea_id} does not belong to project {project_id}.")
 
     rel_store = store_path or f"runs/smoke/{idea_id}/result.json"
-    store_abs = Path(rel_store)
-    if not store_abs.is_absolute():
-        store_abs = (workspace / store_abs).resolve()
+    store_abs = resolve_within_workspace(workspace, rel_store, label="smoke test output path")
     store_abs.parent.mkdir(parents=True, exist_ok=True)
     store_abs.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     stored_rel = store_abs.resolve().relative_to(workspace).as_posix()

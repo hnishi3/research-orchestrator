@@ -2,17 +2,23 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from resorch.ledger import Ledger
+from resorch.paths import _is_logically_within
 from resorch.utils import sha256_file
 
 log = logging.getLogger(__name__)
 
 
 def _within(child: Path, parent: Path) -> bool:
+    # Logical check first (tolerates symlinks inside parent, e.g. data/ from predecessor)
+    if _is_logically_within(child, parent):
+        return True
+    # Fallback: resolved check (follows all symlinks)
     try:
         child.resolve().relative_to(parent.resolve())
         return True
@@ -29,7 +35,8 @@ def register_artifact(
     meta: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     workspace = Path(project["repo_path"]).resolve()
-    path = (workspace / relative_path).resolve()
+    # Use abspath (not resolve) so symlinks inside workspace are preserved for _within check
+    path = Path(os.path.abspath(str(workspace / relative_path)))
     if not _within(path, workspace):
         log.warning("Artifact path outside workspace (skipped). workspace=%s path=%s", workspace, path)
         return {"id": None, "project_id": project["id"], "kind": kind, "path": relative_path, "sha256": None, "meta": meta or {}, "skipped": True}
@@ -71,7 +78,7 @@ def put_artifact(
 ) -> Dict[str, Any]:
     workspace = Path(project["repo_path"]).resolve()
     rel = Path(relative_path)
-    abs_path = (workspace / rel).resolve()
+    abs_path = Path(os.path.abspath(str(workspace / rel)))
     if not _within(abs_path, workspace):
         log.warning("Artifact path outside workspace (skipped). workspace=%s path=%s", workspace, abs_path)
         return {"id": None, "project_id": project["id"], "kind": kind, "path": relative_path, "sha256": None, "meta": {"mode": mode}, "skipped": True}
@@ -83,7 +90,6 @@ def put_artifact(
         with abs_path.open("a", encoding="utf-8") as f:
             f.write(content)
     else:
-        import os
         import tempfile
         fd, tmp = tempfile.mkstemp(dir=str(abs_path.parent), suffix=".tmp")
         os.close(fd)  # close immediately; reopen by path to avoid fd leak

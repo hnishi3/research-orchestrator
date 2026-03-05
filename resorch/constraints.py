@@ -10,6 +10,7 @@ except ImportError:  # pragma: no cover
 
 from resorch.artifacts import register_artifact
 from resorch.ledger import Ledger
+from resorch.paths import resolve_within_workspace
 from resorch.utils import utc_now_iso
 
 
@@ -82,9 +83,7 @@ def write_constraints_template(
 ) -> Dict[str, Any]:
     project = ledger.get_project(project_id)
     workspace = Path(project["repo_path"]).resolve()
-    out = Path(path)
-    if not out.is_absolute():
-        out = (workspace / out).resolve()
+    out = resolve_within_workspace(workspace, path, label="constraints output path")
     if out.exists() and not overwrite:
         raise SystemExit(f"constraints file already exists: {out} (use --overwrite)")
     out.parent.mkdir(parents=True, exist_ok=True)

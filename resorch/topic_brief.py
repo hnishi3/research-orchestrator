@@ -8,6 +8,7 @@ from resorch.artifacts import register_artifact
 from resorch.ideas import get_idea as get_idea_fn
 from resorch.ideas import set_idea_status as set_idea_status_fn
 from resorch.ledger import Ledger
+from resorch.paths import resolve_within_workspace
 from resorch.utils import utc_now_iso
 
 
@@ -235,9 +236,7 @@ def write_topic_brief(
         ]
     )
 
-    out_p = Path(output_path)
-    if not out_p.is_absolute():
-        out_p = (workspace / out_p).resolve()
+    out_p = resolve_within_workspace(workspace, output_path, label="topic brief output path")
     out_p.parent.mkdir(parents=True, exist_ok=True)
     out_p.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 

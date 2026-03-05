@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from resorch.artifacts import register_artifact
 from resorch.ledger import Ledger
+from resorch.paths import resolve_within_workspace
 from resorch.utils import utc_now_iso
 
 
@@ -98,9 +99,7 @@ def create_claim(
         evidence_rows.append(ev)
 
     rel_path = path or f"claims/{claim_id}.md"
-    out_p = Path(rel_path)
-    if not out_p.is_absolute():
-        out_p = (workspace / out_p).resolve()
+    out_p = resolve_within_workspace(workspace, rel_path, label="claim output path")
     out_p.parent.mkdir(parents=True, exist_ok=True)
     if out_p.exists() and not overwrite:
         raise SystemExit(f"Claim already exists: {out_p} (use --overwrite)")

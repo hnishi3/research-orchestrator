@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from resorch.artifacts import register_artifact
 from resorch.idea_dedupe import dedupe_ideas as dedupe_ideas_fn
 from resorch.ledger import Ledger
+from resorch.paths import resolve_within_workspace
 
 try:
     import yaml  # type: ignore
@@ -270,9 +271,7 @@ def score_ideas(
 
     updated.sort(key=lambda r: float(((r.get("scores") or {}).get("total") or -1e9)), reverse=True)
 
-    out_p = Path(output_path)
-    if not out_p.is_absolute():
-        out_p = (workspace / out_p).resolve()
+    out_p = resolve_within_workspace(workspace, output_path, label="score output path")
     out_p.parent.mkdir(parents=True, exist_ok=True)
     with out_p.open("w", encoding="utf-8") as f:
         for rec in updated:
@@ -280,10 +279,7 @@ def score_ideas(
 
     artifact = None
     if register_output_artifact:
-        try:
-            rel = out_p.resolve().relative_to(workspace).as_posix()
-        except ValueError:
-            rel = None
+        rel = out_p.resolve().relative_to(workspace).as_posix()
         if rel is not None:
             artifact = register_artifact(
                 ledger=ledger,
@@ -329,27 +325,21 @@ def dedupe_ideas_jsonl(
 
     deduped, mapping = dedupe_ideas_fn(records, threshold=threshold)
 
-    out_p = Path(output_path)
-    if not out_p.is_absolute():
-        out_p = (workspace / out_p).resolve()
+    out_p = resolve_within_workspace(workspace, output_path, label="dedupe output path")
     out_p.parent.mkdir(parents=True, exist_ok=True)
     with out_p.open("w", encoding="utf-8") as f:
         for rec in deduped:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
-    map_p = Path(mapping_path) if mapping_path else out_p.with_suffix(".mapping.json")
-    if not map_p.is_absolute():
-        map_p = (workspace / map_p).resolve()
+    _mapping_path = mapping_path or str(out_p.with_suffix(".mapping.json"))
+    map_p = resolve_within_workspace(workspace, _mapping_path, label="dedupe mapping path")
     map_p.parent.mkdir(parents=True, exist_ok=True)
     map_p.write_text(json.dumps(mapping, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     artifact_out = None
     artifact_map = None
     if register_output_artifacts:
-        try:
-            _out_rel = out_p.resolve().relative_to(workspace).as_posix()
-        except ValueError:
-            _out_rel = None
+        _out_rel = out_p.resolve().relative_to(workspace).as_posix()
         if _out_rel is not None:
             artifact_out = register_artifact(
                 ledger=ledger,
@@ -358,10 +348,7 @@ def dedupe_ideas_jsonl(
                 relative_path=_out_rel,
                 meta={"threshold": float(threshold), "input_path": str(inp)},
             )
-        try:
-            _map_rel = map_p.resolve().relative_to(workspace).as_posix()
-        except ValueError:
-            _map_rel = None
+        _map_rel = map_p.resolve().relative_to(workspace).as_posix()
         if _map_rel is not None:
             artifact_map = register_artifact(
                 ledger=ledger,

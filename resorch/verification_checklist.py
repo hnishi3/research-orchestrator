@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 from resorch.evidence_store import validate_evidence_url
 from resorch.ledger import Ledger
 from resorch.manuscript_checker import check_manuscript_consistency
-from resorch.paths import RepoPaths, find_repo_root
+from resorch.paths import RepoPaths, find_repo_root, resolve_within_workspace
 from resorch.utils import utc_now_iso
 
 
@@ -1010,8 +1010,9 @@ def write_checklist(
     output_path: Optional[Path] = None,
 ) -> Path:
     workspace = Path(workspace_dir).resolve()
-    out = output_path or (workspace / "reviews" / "verification_checklist.md")
-    out = out if out.is_absolute() else (workspace / out)
+    out = resolve_within_workspace(
+        workspace, output_path or "reviews/verification_checklist.md", label="checklist output path"
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(format_checklist_markdown(checklist), encoding="utf-8")
     return out

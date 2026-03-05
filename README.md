@@ -310,12 +310,12 @@ Defines conditions for project stage transitions (e.g., intake â†’ exploration â
 ./orchestrator project open <project_id>
 ./orchestrator project set-stage <project_id> --stage <stage>
 
-# Create a successor project (inherits data/src/configs via symlinks)
+# Create a successor project (inherits data via symlink, src/configs via copy)
 ./orchestrator project create-successor --predecessor <id> \
   [--id <new_id>] [--title <title>] [--inherit data src configs]
 ```
 
-The successor gets a `notes/predecessor_summary.md` with the predecessor's scoreboard and analysis digest, automatically loaded into the Planner's context.
+The successor gets a `notes/predecessor_summary.md` with the predecessor's scoreboard and analysis digest, automatically loaded into the Planner's context. `data/` is symlinked (large datasets, read-mostly); `src/` and `configs/` are copied so the successor can modify them without affecting the predecessor.
 
 ### Tasks
 
@@ -330,7 +330,7 @@ Task types: `codex_exec` (Codex sandbox), `shell_exec` (local shell), `review_fi
 
 Notes:
 - `codex_exec` accepts `spec.prompt` or `spec.prompt_file`
-- Default sandbox: `read-only`; `review_fix` defaults to `workspace-write`
+- Default sandbox: `danger-full-access` (see [SECURITY.md](SECURITY.md) for rationale)
 - The runner appends `schemas/task_result.schema.json` for structured output
 - The runner injects `-c model_reasoning_effort="high"` unless overridden in `spec.config_overrides`
 

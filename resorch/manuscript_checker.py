@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from resorch.evidence_store import validate_evidence_url
+from resorch.paths import resolve_within_workspace
 
 
 FIG_REF_RE = re.compile(r"\b(?:Figure|Fig\.?)\s*(\d+)\b", re.IGNORECASE)
@@ -1321,8 +1322,9 @@ def write_consistency_report(
     output_path: Optional[Path] = None,
 ) -> Path:
     workspace = Path(workspace_dir).resolve()
-    out = output_path or (workspace / "results" / "manuscript_consistency_report.md")
-    out = out if out.is_absolute() else (workspace / out)
+    out = resolve_within_workspace(
+        workspace, output_path or "results/manuscript_consistency_report.md", label="consistency report output path"
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(format_consistency_report(report), encoding="utf-8")
     return out
