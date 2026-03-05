@@ -308,7 +308,7 @@ Defines conditions for project stage transitions (e.g., intake â†’ exploration â
 ./orchestrator project new --title "Demo Project"
 ./orchestrator project list
 ./orchestrator project open <project_id>
-./orchestrator project set-stage <project_id> <stage>
+./orchestrator project set-stage <project_id> --stage <stage>
 
 # Create a successor project (inherits data/src/configs via symlinks)
 ./orchestrator project create-successor --predecessor <id> \
@@ -323,7 +323,7 @@ The successor gets a `notes/predecessor_summary.md` with the predecessor's score
 ./orchestrator task create --project <id> --type codex_exec \
   --spec-json '{"prompt":"Say hello.","sandbox":"read-only"}'
 ./orchestrator task run <task_id>
-./orchestrator task status <task_id>
+./orchestrator task status [--project <id>]
 ```
 
 Task types: `codex_exec` (Codex sandbox), `shell_exec` (local shell), `review_fix` (auto-created from reviews).
@@ -348,7 +348,7 @@ Notes:
 
 ```bash
 ./orchestrator artifact list --project <id>
-./orchestrator artifact get <artifact_id>
+./orchestrator artifact get --project <id> --path <workspace-relative-path>
 ./orchestrator artifact put --project <id> --kind <kind> --path <file_path>
 ```
 
@@ -525,7 +525,7 @@ The following features are described in the design (`docs/TOPIC_ENGINE.md`) but 
 Commit an idea and create a ready-to-run project in one step:
 
 ```bash
-./orchestrator idea commit-and-launch --project <id> --idea <idea_id>
+./orchestrator idea commit-and-launch --idea-id <idea_id>
 ```
 
 This runs `topic commit` + `project new --idea-id`, wiring the topic brief into the new workspace.
