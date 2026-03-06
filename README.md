@@ -18,7 +18,8 @@ to iterate through PDCA (Plan-Do-Check-Act) cycles across multiple research proj
 | [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`) | Planner / Reviewer (subscription-based, no API cost) | Optional |
 | `ANTHROPIC_API_KEY` | Anthropic API Reviewer | Optional |
 
-The entry point is the `./orchestrator` script at the repo root. No `pip install` step is needed; ensure the dependencies are available in your Python environment.
+**This project is designed to run from a cloned repository** — `pip install` from a wheel is not supported.
+Use `git clone` followed by `pip install -e .` (editable install) or run `./orchestrator` directly from the repo root.
 
 ## Quickstart
 
