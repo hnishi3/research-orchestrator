@@ -654,3 +654,9 @@ pytest -q   # 450+ tests
 | `docs/API_WEB_SEARCH.md` | Web search via OpenAI API |
 | `docs/CODEX_MCP_SETUP.md` | MCP server setup for Codex |
 | `docs/RELATED_WORK.md` | Prior work & design takeaways |
+
+## Acknowledgements / Tooling note
+
+This project was developed with assistance from multiple LLM tools.
+High-level system design and architectural iterations were assisted by GPT-5.2 Pro; implementation tasks were executed via Codex CLI; and runtime tuning/debugging was performed interactively with Claude Code CLI.
+Final integration decisions, acceptance testing, and responsibility for the released code remain with the maintainer.
