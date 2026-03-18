@@ -70,6 +70,44 @@ def test_checklist_metric_items(tmp_path: Path) -> None:
     assert items["metric_defined_operationally"].auto_status == "pass"
 
 
+def test_checklist_metric_reproducible_prefers_explicit_primary_metric_aliases(tmp_path: Path) -> None:
+    workspace = tmp_path / "ws"
+    _write(
+        workspace / "results" / "scoreboard.json",
+        json.dumps(
+            {
+                "primary_metric": {
+                    "name": "accuracy",
+                    "direction": "maximize",
+                    "current": 0.86,
+                    "baseline": 0.8,
+                    "n_runs": 3,
+                    "ci_95": 0.02,
+                    "ci95": 0.02,
+                    "ci": 0.02,
+                    "confidence_interval": 0.02,
+                },
+                "metrics": {
+                    "primary_metric_n_runs": 3,
+                    "primary_metric_ci_95": 0.02,
+                    "ci_95": 0.02,
+                    "ci95": 0.02,
+                    "ci": 0.02,
+                    "confidence_interval": 0.02,
+                },
+                "runs": [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}],
+            }
+        )
+        + "\n",
+    )
+
+    checklist = generate_verification_checklist(workspace)
+    items = _items_by_id(checklist)
+
+    assert items["metric_reproducible"].auto_status == "pass"
+    assert items["metric_reproducible"].auto_evidence.startswith("n_runs=3")
+
+
 def test_checklist_missing_scoreboard(tmp_path: Path) -> None:
     workspace = tmp_path / "ws"
     workspace.mkdir(parents=True, exist_ok=True)

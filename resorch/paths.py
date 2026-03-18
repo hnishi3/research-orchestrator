@@ -16,6 +16,9 @@ class RepoPaths:
 
     @property
     def db_path(self) -> Path:
+        env = os.environ.get("RESORCH_DB_PATH")
+        if env:
+            return Path(env).expanduser()
         return self.state_dir / "ledger.db"
 
     @property

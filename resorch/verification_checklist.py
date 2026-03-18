@@ -378,6 +378,37 @@ def generate_verification_checklist(
             except ValueError:
                 n_runs = None
         has_ci = any(k in cur_obj for k in ("ci_95", "ci95", "ci", "confidence_interval"))
+    if not has_ci:
+        has_ci = any(
+            _as_float(pm.get(key)) is not None
+            for key in ("ci_95", "ci95", "ci", "confidence_interval")
+        )
+    if not has_ci:
+        has_ci = any(
+            _metric_value(scoreboard, key) is not None
+            for key in (
+                "primary_metric_ci_95",
+                "primary_metric_ci95",
+                "primary_metric_ci",
+                "primary_metric_confidence_interval",
+                "ci_95",
+                "ci95",
+                "ci",
+                "confidence_interval",
+            )
+        )
+    if n_runs is None:
+        for key in ("run_count", "n_runs"):
+            candidate = _as_float(pm.get(key))
+            if candidate is not None:
+                n_runs = int(candidate)
+                break
+    if n_runs is None:
+        for key in ("primary_metric_run_count", "primary_metric_n_runs", "run_count", "n_runs"):
+            candidate = _metric_value(scoreboard, key)
+            if candidate is not None:
+                n_runs = int(candidate)
+                break
     if n_runs is None:
         runs = scoreboard.get("runs")
         if isinstance(runs, list):
@@ -388,7 +419,7 @@ def generate_verification_checklist(
             "metrics",
             "Were metrics computed from \u22653 runs with CI?",
             "needs_human",
-            "Could not determine n_runs from scoreboard primary_metric.current.n_runs or runs[].",
+            "Could not determine n_runs from scoreboard primary_metric.current, primary_metric aliases, or runs[].",
         )
     elif n_runs < 3:
         add_item(
@@ -404,7 +435,7 @@ def generate_verification_checklist(
             "metrics",
             "Were metrics computed from \u22653 runs with CI?",
             "fail",
-            f"n_runs={n_runs}, but no CI field found (expected ci_95/ci95/ci/confidence_interval).",
+            f"n_runs={n_runs}, but no CI field found in primary_metric.current or scoreboard aliases (expected ci_95/ci95/ci/confidence_interval).",
         )
     else:
         add_item(
@@ -412,7 +443,7 @@ def generate_verification_checklist(
             "metrics",
             "Were metrics computed from \u22653 runs with CI?",
             "pass",
-            f"n_runs={n_runs} with CI field present in primary_metric.current.",
+            f"n_runs={n_runs} with CI field present in primary_metric/scoreboard aliases.",
         )
 
     # 4. metric_defined_operationally

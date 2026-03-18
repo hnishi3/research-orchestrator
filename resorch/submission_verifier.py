@@ -152,14 +152,47 @@ def _check_scoreboard(scoreboard_path: Path) -> Tuple[str, str, List[str], List[
             except ValueError:
                 n_runs = None
         has_ci = any(k in cur for k in ("ci", "ci_95", "ci95", "confidence_interval"))
+    if not has_ci:
+        has_ci = any(
+            isinstance(pm.get(k), (int, float, str)) and not isinstance(pm.get(k), bool)
+            for k in ("ci", "ci_95", "ci95", "confidence_interval")
+        )
+    if not has_ci:
+        metrics = scoreboard.get("metrics")
+        metric_sources = metrics if isinstance(metrics, dict) else {}
+        has_ci = any(
+            key in metric_sources or key in scoreboard
+            for key in (
+                "primary_metric_ci_95",
+                "primary_metric_ci95",
+                "primary_metric_ci",
+                "primary_metric_confidence_interval",
+                "ci_95",
+                "ci95",
+                "ci",
+                "confidence_interval",
+            )
+        )
 
     if n_runs is None:
         runs = scoreboard.get("runs")
         if isinstance(runs, list):
             n_runs = len(runs)
+    if n_runs is None:
+        for key in ("run_count", "n_runs"):
+            raw_n = pm.get(key)
+            if isinstance(raw_n, (int, float)) and not isinstance(raw_n, bool):
+                n_runs = int(raw_n)
+                break
+            if isinstance(raw_n, str):
+                try:
+                    n_runs = int(float(raw_n))
+                    break
+                except ValueError:
+                    continue
 
     if n_runs is None:
-        msg = "n_runs could not be determined from primary_metric.current.n_runs or runs[]"
+        msg = "n_runs could not be determined from primary_metric.current, primary_metric aliases, or runs[]"
         needs.append(msg)
         attention.append({"file": rel, "location": "primary_metric.current", "reason": msg})
     elif n_runs < 3:
@@ -168,7 +201,7 @@ def _check_scoreboard(scoreboard_path: Path) -> Tuple[str, str, List[str], List[
         attention.append({"file": rel, "location": "primary_metric.current.n_runs", "reason": msg})
 
     if n_runs is not None and not has_ci:
-        msg = "CI field is missing in primary_metric.current (expected ci_95/ci95/ci/confidence_interval)"
+        msg = "CI field is missing in primary_metric.current or scoreboard aliases (expected ci_95/ci95/ci/confidence_interval)"
         needs.append(msg)
         attention.append({"file": rel, "location": "primary_metric.current", "reason": msg})
 

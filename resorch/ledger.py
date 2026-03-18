@@ -30,8 +30,9 @@ class Ledger:
 
     def conn(self) -> sqlite3.Connection:
         if self._conn is None:
-            self.paths.state_dir.mkdir(parents=True, exist_ok=True)
-            self._conn = sqlite3.connect(str(self.paths.db_path), timeout=120)
+            db = self.paths.db_path
+            db.parent.mkdir(parents=True, exist_ok=True)
+            self._conn = sqlite3.connect(str(db), timeout=120)
             self._conn.row_factory = _dict_row_factory
             self._conn.execute("PRAGMA foreign_keys = ON;")
             # Safer defaults for concurrent readers/writers across CLI + webhook processes.

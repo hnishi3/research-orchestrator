@@ -97,8 +97,8 @@ class AgentLoopConfig:
 
 
 def _default_config() -> AgentLoopConfig:
-    model = os.environ.get("OPENAI_PLANNER_MODEL") or "gpt-5.2-pro"
-    provider = os.environ.get("PLANNER_PROVIDER") or "openai"
+    model = os.environ.get("OPENAI_PLANNER_MODEL") or "opus"
+    provider = os.environ.get("PLANNER_PROVIDER") or "claude_code_cli"
     return AgentLoopConfig(planner_model=model, planner_provider=provider)
 
 
@@ -868,7 +868,7 @@ def run_agent_loop(
             escalation_cfg = _pick_reviewer(policy, "hard")
 
             reviewer_cfg = primary_cfg if (str(rec) == "hard" and dual_on_hard) else _pick_reviewer(policy, str(rec))
-            provider = str(reviewer_cfg.get("provider") or "openai")
+            provider = str(reviewer_cfg.get("provider") or "codex_cli")
             reviewer_model = reviewer_cfg.get("model")
             stage = str(get_project(ledger, project_id).get("stage") or "analysis")
             targets = (iter_out.get("review_recommendation") or {}).get("targets") or []
