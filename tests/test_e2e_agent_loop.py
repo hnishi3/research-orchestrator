@@ -145,6 +145,14 @@ class _FakeOpenAIClient:
         raise AssertionError("responses_get should not be called in this test.")
 
 
+def _claude_cli_available() -> bool:
+    try:
+        return subprocess.run(["claude", "--version"], capture_output=True, timeout=10).returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+@pytest.mark.skipif(not _claude_cli_available(), reason="Claude Code CLI not available")
 def test_e2e_agent_loop_two_iterations_includes_previous_review_findings(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
