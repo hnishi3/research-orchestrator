@@ -419,9 +419,9 @@ def run_autopilot_iteration(
         log.info("Reusing plan from previous run (skipped Planner). Actions: %d", len(plan.get("actions") or []))
     else:
         # Determine planner provider from config.
-        planner_provider = "openai"
+        planner_provider = "claude_code_cli"
         if isinstance(config, dict):
-            planner_provider = str(config.get("planner_provider", "openai")).strip().lower()
+            planner_provider = str(config.get("planner_provider", "claude_code_cli")).strip().lower()
 
         if planner_provider == "claude_code_cli":
             plan, planner_meta = generate_plan_claude(

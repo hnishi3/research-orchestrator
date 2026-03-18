@@ -1317,7 +1317,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args._handler == "autopilot_run":
-        model = args.model or os.environ.get("OPENAI_PLANNER_MODEL") or "gpt-5.2-pro"
+        model = args.model or os.environ.get("OPENAI_PLANNER_MODEL") or "opus"
         _print_json(
             run_autopilot_iteration_fn(
                 ledger=ledger,

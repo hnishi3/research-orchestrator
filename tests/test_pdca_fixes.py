@@ -126,6 +126,7 @@ def test_challenger_trigger_fires_on_codex_exec_success(monkeypatch: pytest.Monk
     out = run_autopilot_iteration(
         ledger=ledger, project_id="p1", objective="test", model="gpt-5.2-pro",
         iteration=0, dry_run=False, max_actions=1, background=False,
+        config={"planner_provider": "openai"},
     )
 
     # The key assertion: challenger should have been called (not skipped).

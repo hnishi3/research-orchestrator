@@ -92,7 +92,7 @@ def test_pre_exec_review_runs_between_codex_and_shell(monkeypatch: pytest.Monkey
         dry_run=False,
         max_actions=2,
         background=False,
-        config={"max_fix_tasks_per_review": 10},
+        config={"max_fix_tasks_per_review": 10, "planner_provider": "openai"},
     )
 
     assert events == ["task:codex_exec", "job:code_review", "task:shell_exec"]
@@ -161,7 +161,7 @@ def test_pre_exec_review_old_key_fallback(monkeypatch: pytest.MonkeyPatch, tmp_p
         dry_run=False,
         max_actions=2,
         background=False,
-        config={"max_fix_tasks_per_review": 10},
+        config={"max_fix_tasks_per_review": 10, "planner_provider": "openai"},
     )
 
     assert events == ["task:codex_exec", "job:code_review", "task:shell_exec"]
@@ -240,7 +240,7 @@ def test_pre_exec_review_reject_runs_fix_then_retries(monkeypatch: pytest.Monkey
         dry_run=False,
         max_actions=2,
         background=False,
-        config={"max_fix_tasks_per_review": 10},
+        config={"max_fix_tasks_per_review": 10, "planner_provider": "openai"},
     )
 
     assert events == ["task:codex_exec", "job:code_review", "task:review_fix", "job:code_review", "task:shell_exec"]
