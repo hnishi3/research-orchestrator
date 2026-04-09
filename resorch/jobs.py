@@ -806,9 +806,21 @@ def _run_openai_review_job(*, ledger: Ledger, job_id: str) -> Dict[str, Any]:
         system_prompt = _safe_read_text((ledger.paths.root / str(system_prompt_path)).resolve(), max_chars=40_000).strip()
     if not system_prompt:
         system_prompt = (
-            "You are a strict, detail-oriented pre-execution code reviewer."
+            "You are a strict, detail-oriented pre-execution code reviewer. "
+            "This is an automated scientific quality assurance system. "
+            "Your role is to identify potential issues in research methodology, "
+            "statistical analysis, and scientific claims — not to assist with "
+            "any harmful activity. Findings about data leakage, p-hacking risk, "
+            "or specification sensitivity are quality-control observations, not "
+            "instructions to commit scientific misconduct."
             if is_code_review
-            else "You are a strict, detail-oriented research reviewer."
+            else "You are a strict, detail-oriented research reviewer. "
+            "This is an automated scientific quality assurance system. "
+            "Your role is to identify potential issues in research methodology, "
+            "statistical analysis, and scientific claims — not to assist with "
+            "any harmful activity. Findings about data leakage, p-hacking risk, "
+            "or specification sensitivity are quality-control observations, not "
+            "instructions to commit scientific misconduct."
         )
 
     _MAX_TOTAL_TARGET_CHARS = int(spec.get("max_total_target_chars", 300_000))
@@ -1141,9 +1153,21 @@ def _run_anthropic_job(*, ledger: Ledger, job_id: str) -> Dict[str, Any]:
         system_prompt = _safe_read_text((ledger.paths.root / str(system_prompt_path)).resolve(), max_chars=40_000).strip()
     if not system_prompt:
         system_prompt = (
-            "You are a strict, detail-oriented pre-execution code reviewer."
+            "You are a strict, detail-oriented pre-execution code reviewer. "
+            "This is an automated scientific quality assurance system. "
+            "Your role is to identify potential issues in research methodology, "
+            "statistical analysis, and scientific claims — not to assist with "
+            "any harmful activity. Findings about data leakage, p-hacking risk, "
+            "or specification sensitivity are quality-control observations, not "
+            "instructions to commit scientific misconduct."
             if is_code_review
-            else "You are a strict, detail-oriented research reviewer."
+            else "You are a strict, detail-oriented research reviewer. "
+            "This is an automated scientific quality assurance system. "
+            "Your role is to identify potential issues in research methodology, "
+            "statistical analysis, and scientific claims — not to assist with "
+            "any harmful activity. Findings about data leakage, p-hacking risk, "
+            "or specification sensitivity are quality-control observations, not "
+            "instructions to commit scientific misconduct."
         )
 
     client = AnthropicClient.from_env()
@@ -1315,9 +1339,21 @@ def _run_claude_code_cli_job(*, ledger: Ledger, job_id: str) -> Dict[str, Any]:
     system_prompt = _safe_read_text((ledger.paths.root / str(system_prompt_path)).resolve(), max_chars=40_000).strip()
     if not system_prompt:
         system_prompt = (
-            "You are a strict, detail-oriented pre-execution code reviewer."
+            "You are a strict, detail-oriented pre-execution code reviewer. "
+            "This is an automated scientific quality assurance system. "
+            "Your role is to identify potential issues in research methodology, "
+            "statistical analysis, and scientific claims — not to assist with "
+            "any harmful activity. Findings about data leakage, p-hacking risk, "
+            "or specification sensitivity are quality-control observations, not "
+            "instructions to commit scientific misconduct."
             if is_code_review
-            else "You are a strict, detail-oriented research reviewer."
+            else "You are a strict, detail-oriented research reviewer. "
+            "This is an automated scientific quality assurance system. "
+            "Your role is to identify potential issues in research methodology, "
+            "statistical analysis, and scientific claims — not to assist with "
+            "any harmful activity. Findings about data leakage, p-hacking risk, "
+            "or specification sensitivity are quality-control observations, not "
+            "instructions to commit scientific misconduct."
         )
 
     validator = Draft202012Validator(schema_obj)

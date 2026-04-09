@@ -42,3 +42,11 @@ metric_watchdog:
   # Stop if primary_metric.current.mean is a number but has the exact same
   # value for this many consecutive iterations.  Set to 0 to disable.
   unchanged_metric_force_stop_after: 3
+
+  # Stages where metric watchdogs (both null and unchanged) are skipped.
+  # Late-pipeline stages where metrics are expected to be stable.
+  exempt_stages:
+    - writing
+    - validation
+    - revision
+    - final

@@ -1,12 +1,25 @@
 # Research-Orchestrator (resorch)
 
-A local-first, multi-LLM research agent system that coordinates:
+Research-Orchestrator is a framework for iterative, AI-assisted research.
 
-- **Planner** (OpenAI GPT / Claude Code CLI / Codex CLI) — generates experiment plans,
-- **Executor** (Codex CLI) — runs code and experiments in a sandbox,
-- **Reviewer** (OpenAI / Claude Code CLI / Codex CLI / Anthropic API) — reviews results, triggers pivots,
+Starting from your objective and evaluation criteria, it can:
+search relevant literature, propose experiments, write and run analysis code,
+review whether the results make scientific sense, and then revise the plan.
 
-to iterate through PDCA (Plan-Do-Check-Act) cycles across multiple research projects.
+This cycle repeats, with each iteration building on the last.
+Outputs include analysis code, figures, manuscript drafts,
+and a scoreboard tracking progress toward your success criteria.
+
+### How It Works
+
+Three AI roles collaborate in each iteration:
+
+1. **Planner** — searches literature, designs the next experiment
+2. **Executor** — writes and runs analysis scripts
+3. **Reviewer** — checks results for scientific correctness, suggests improvements
+
+Multiple LLM providers are supported (Claude, GPT, Codex).
+All project data stays in local workspace directories.
 
 ## Prerequisites
 
@@ -287,7 +300,7 @@ metric_watchdog:
 
 ### `configs/stage_transitions.yaml` — Stage Gates
 
-Defines conditions for project stage transitions (e.g., intake → exploration → experiment → analysis → writing).
+Defines conditions for Topic Engine stage gates (e.g., constraints → generate → novelty check → smoke test → value scoring → commit). Project stages in the agent loop follow a separate order: intake → literature → method → implementation → analysis → writing → submission.
 
 ## Environment Variables
 
@@ -397,16 +410,16 @@ When external compute jobs are pending, the agent loop pauses (`should_stop=true
 
 ### Topic Engine & Idea Bank
 
-The Topic Engine manages research topic selection through a 6-stage pipeline. Each stage has CLI commands for the manual steps; automated LLM-driven stages are planned but not yet implemented.
+The Topic Engine manages research topic selection through a 6-stage pipeline. Each stage has CLI commands; the `topic engine` command automates the full loop (generate → dedupe → score → activate) via Codex.
 
 #### Stage Pipeline
 
 | Stage | Name | CLI Support | Automation |
 |-------|------|-------------|------------|
 | 0 | Constraints Capture | `constraints init` | Manual (fill YAML template) |
-| 1 | Idea Generation | `idea import` | **Not implemented** — create JSONL externally, then import. Prompt template at `prompts/idea_generation.md` |
-| 2 | Novelty Check | `evidence add/list` | **Not implemented** — run Deep Research jobs manually, add evidence per idea |
-| 3 | Smoke Test | `smoke ingest/list` | **Not implemented** — run experiments manually, ingest results |
+| 1 | Idea Generation | `idea import`, `topic engine` | Automated via `topic engine` (Codex generates ideas). Standalone `idea generate` not yet implemented; use `idea import` for manual JSONL |
+| 2 | Novelty Check | `evidence add/list` | Manual — run Deep Research jobs, then `evidence add` per idea |
+| 3 | Smoke Test | `smoke ingest/list` | Manual — run experiments externally, ingest results |
 | 4 | Value & Scoring | `idea score`, `idea dedupe` | Rubric-weighted scoring (`--provider arithmetic`, default) or LLM evaluation (`--provider claude`) |
 | 5 | Commit | `topic commit`, `topic brief` | Generates structured `topic_brief.md` from idea record |
 
@@ -513,13 +526,13 @@ Generate a structured Markdown brief from an idea record (title ideas, claim, ev
 ./orchestrator topic engine --project <id> --rounds 3 --top-k 5 --dry-run
 ```
 
-#### Not Yet Implemented
+#### Not Yet Automated
 
-The following features are described in the design (`docs/TOPIC_ENGINE.md`) but not yet automated:
+The following features are described in the design (`docs/TOPIC_ENGINE.md`) but not yet fully automated:
 
-- **`idea generate`** — standalone LLM-driven bulk idea generation (separate from `topic engine`). Currently requires external creation + `idea import`.
+- **`idea generate`** — standalone LLM-driven bulk idea generation (separate from `topic engine`). Currently requires external creation + `idea import`. The `topic engine` command handles generation internally.
 - **Automated novelty search** — per-idea web search / Deep Research to find related work. Currently manual: run jobs, then `evidence add`.
-- **Auto stage transitions** — `stage check` evaluates gates but does not auto-apply pass/reject in the agent loop.
+- **Topic Engine stage gate auto-apply** — `stage check` evaluates gates but does not auto-apply pass/reject. Note: project-level stage transitions (e.g., analysis → writing) ARE auto-applied by the agent loop when the Planner requests them.
 
 #### Commit & Launch
 

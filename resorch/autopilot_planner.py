@@ -596,6 +596,30 @@ def _build_planner_prompt(
         "    or analysis.  Describe the GOAL + inputs/outputs and let Codex read the actual files\n"
         "    and implement.  Codex can inspect workspace files at runtime; you (the Planner) cannot.\n"
         "    This prevents schema mismatches — e.g., assuming a JSON field is a dict when it is a float.\n"
+        "\nPrimary metric selection rules:\n"
+        "- When choosing primary_metric, first check problem.md for success criteria or\n"
+        "  evaluation metrics. If they exist, derive primary_metric from them — success criteria\n"
+        "  define what 'done' looks like, and primary_metric should track progress toward it.\n"
+        "- If problem.md has multiple success criteria, choose the one that best captures\n"
+        "  overall progress (e.g., a pass rate across criteria, or the most challenging single criterion).\n"
+        "- If problem.md has NO explicit success criteria or evaluation metrics, choose a metric\n"
+        "  that reflects pipeline improvement — something your actions can actually change\n"
+        "  (e.g., items processed, tests passing, accuracy on a benchmark).\n"
+        "- Avoid metrics that are intrinsic properties of the dataset and cannot change regardless\n"
+        "  of what the pipeline does (e.g., the fraction of a fixed dataset that has property X,\n"
+        "  or a distribution parameter of the input data). These are discovery results, not\n"
+        "  progress indicators. They are fine as secondary metrics in `metrics`, but not as\n"
+        "  primary_metric for stagnation tracking.\n"
+        "- If the current primary_metric has not moved for 2+ iterations, ask yourself:\n"
+        "  'Can my actions change this number?' If not, revise it using the metric_revision mechanism.\n"
+        "\nWorkspace boundary constraint (CRITICAL):\n"
+        "- All actions MUST operate ONLY on files within the project workspace.\n"
+        "- Do NOT propose modifying orchestrator code (resorch/), verifier code, review code,\n"
+        "  or any file outside the workspace directory shown in the file tree above.\n"
+        "- If a verifier or review check fails, fix the RESEARCH ARTIFACTS (data, scripts,\n"
+        "  manuscript) to satisfy the check — never modify the checker itself.\n"
+        "- This is a scientific integrity constraint: the evaluation pipeline must remain\n"
+        "  independent of the work being evaluated.\n"
         "\nResearch-phase obligations (literature search via web search):\n"
         "- You have access to "
         + ("WebSearch and WebFetch tools" if provider == "claude_code_cli" else "web_search")
@@ -650,8 +674,6 @@ def _build_planner_prompt(
         "  scoreboard.json accordingly. Do not leave the next stage without a measurable primary metric.\n"
         "- If a stagnation report is present (above), you MUST act on it: do NOT repeat the same strategy.\n"
         + _compact_json_schema(workspace)
-        + "\nJSON Schema:\n"
-        + schema_txt
         + "\n\nProject context:\n"
         + json.dumps(
             {
@@ -678,6 +700,12 @@ def _build_planner_prompt(
         + "\n".join([f"\n--- FILE: {rel} ---\n{txt}\n" for rel, txt in reference_files])
         + "\nObjective:\n"
         + objective.strip()
+        + "\n\n"
+        + "============================================================\n"
+        + "OUTPUT FORMAT REMINDER (respond with EXACTLY this structure)\n"
+        + "============================================================\n"
+        + "JSON Schema:\n"
+        + schema_txt
         + "\n"
     )
 
@@ -767,9 +795,10 @@ def generate_plan_openai(
                 last_err = semantic_errors[0]
                 continue
             return plan, planner_meta
+        all_errors = "; ".join(e.message for e in errors[:10])
         if attempt >= max_retries:
-            raise ValueError(f"Planner output schema validation failed: {errors[0].message}")
-        last_err = errors[0].message
+            raise ValueError(f"Planner output schema validation failed: {all_errors}")
+        last_err = f"ALL schema errors: {all_errors}"
 
     raise SystemExit("generate_plan_openai failed unexpectedly (exhausted retries).")
 
@@ -879,11 +908,94 @@ def generate_plan_claude(
                 last_err = semantic_errors[0]
                 continue
             return plan, planner_meta
+        # --- DEBUG: dump failed plan for inspection ---
+        _debug_path = workspace / "notes" / "autopilot" / f"failed_plan_attempt{attempt}.json"
+        try:
+            _debug_path.parent.mkdir(parents=True, exist_ok=True)
+            _debug_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+            log.warning("Dumped failed plan to %s (errors: %s)", _debug_path, [e.message for e in errors])
+        except Exception:
+            pass
+        all_errors = "; ".join(e.message for e in errors[:10])
         if attempt >= max_retries:
-            raise ValueError(f"Claude planner output schema validation failed: {errors[0].message}")
-        last_err = errors[0].message
+            # --- Sonnet reformatter fallback ---
+            log.warning("Opus planner failed schema validation after %d retries, trying Sonnet reformatter", max_retries + 1)
+            reformatted = _reformat_plan_with_sonnet(plan, schema, schema_txt=json.dumps(schema, ensure_ascii=False, indent=2), workspace=workspace)
+            if reformatted is not None:
+                reformatted = _repair_plan_actions_for_runtime(reformatted)
+                re_errors = sorted(validator.iter_errors(reformatted), key=lambda e: e.json_path)
+                if not re_errors:
+                    sem_errors = _validate_plan_action_semantics(reformatted)
+                    if not sem_errors:
+                        planner_meta["reformatted_by"] = "sonnet"
+                        log.info("Sonnet reformatter succeeded")
+                        return reformatted, planner_meta
+                log.warning("Sonnet reformatter output still has errors: %s", [e.message for e in re_errors[:5]] if re_errors else sem_errors)
+            raise ValueError(f"Claude planner output schema validation failed: {all_errors}")
+        last_err = f"ALL schema errors: {all_errors}"
 
     raise SystemExit("generate_plan_claude failed unexpectedly (exhausted retries).")
+
+
+def _reformat_plan_with_sonnet(
+    raw_plan: Dict[str, Any],
+    schema: Dict[str, Any],
+    *,
+    schema_txt: str,
+    workspace: Path,
+) -> Optional[Dict[str, Any]]:
+    """Use Claude Sonnet as a lightweight reformatter to fix schema compliance.
+
+    Sonnet gets a short prompt (raw plan + schema only) so attention is focused.
+    Returns the reformatted plan dict, or None on failure.
+    """
+    from resorch.providers.claude_code_cli import (
+        ClaudeCodeCliConfig,
+        ClaudeCodeCliError,
+        extract_structured_output,
+        run_claude_code_print_json,
+    )
+
+    raw_txt = json.dumps(raw_plan, ensure_ascii=False, indent=2)
+    prompt = (
+        "The following JSON plan was produced by a Planner but does not match the required schema.\n"
+        "Reformat it to EXACTLY match the schema. Preserve all scientific content.\n\n"
+        "Rules:\n"
+        "- Add missing required fields with sensible defaults:\n"
+        "  plan_id: generate from project_id + iteration\n"
+        "  self_confidence: estimate from plan content (0.0-1.0)\n"
+        "  evidence_strength: estimate from plan content (0.0-1.0)\n"
+        "  should_stop: false (unless plan content suggests stopping)\n"
+        "- Each action MUST have: title (string), task_type ('codex_exec' or 'shell_exec'), spec (object)\n"
+        "  If task_type is missing, infer from context: short commands = shell_exec, code generation = codex_exec\n"
+        "  If spec is empty {}, set spec.prompt (for codex_exec) or spec.command (for shell_exec) from the title\n"
+        "- Remove any fields not in the schema\n"
+        "- Do NOT change the scientific content of titles, objectives, or alternatives\n\n"
+        f"--- RAW PLAN ---\n{raw_txt}\n\n"
+        f"--- TARGET SCHEMA ---\n{schema_txt}\n\n"
+        "Respond with ONLY the corrected JSON object."
+    )
+
+    cfg = ClaudeCodeCliConfig(
+        model="sonnet",
+        timeout_sec=120,
+        tools="",
+        allowed_tools="",
+        no_session_persistence=True,
+    )
+
+    try:
+        cli_json = run_claude_code_print_json(
+            prompt=prompt,
+            system_prompt="You are a JSON reformatter. Output only valid JSON matching the schema.",
+            json_schema=schema,
+            workspace_dir=workspace,
+            config=cfg,
+        )
+        return extract_structured_output(cli_json)
+    except (ClaudeCodeCliError, Exception) as e:
+        log.warning("Sonnet reformatter failed: %s", e)
+        return None
 
 
 def generate_plan_codex(
@@ -1008,8 +1120,9 @@ def generate_plan_codex(
                 last_err = semantic_errors[0]
                 continue
             return plan, planner_meta
+        all_errors = "; ".join(e.message for e in errors[:10])
         if attempt >= max_retries:
-            raise ValueError(f"Codex planner output schema validation failed: {errors[0].message}")
-        last_err = errors[0].message
+            raise ValueError(f"Codex planner output schema validation failed: {all_errors}")
+        last_err = f"ALL schema errors: {all_errors}"
 
     raise SystemExit("generate_plan_codex failed unexpectedly (exhausted retries).")

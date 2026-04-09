@@ -91,7 +91,11 @@ def run_claude_code_print_json(
 
     if proc.returncode != 0:
         stderr = (proc.stderr or "").strip()
-        raise ClaudeCodeCliError(f"Claude Code CLI failed (exit {proc.returncode}): {stderr}")
+        stdout_snippet = (proc.stdout or "")[:500].strip()
+        raise ClaudeCodeCliError(
+            f"Claude Code CLI failed (exit {proc.returncode}): {stderr}"
+            + (f"\nstdout (first 500 chars): {stdout_snippet}" if stdout_snippet else "\n(no stdout)")
+        )
 
     stdout = (proc.stdout or "").strip()
     if not stdout:

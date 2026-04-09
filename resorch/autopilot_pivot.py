@@ -96,6 +96,9 @@ def _pivot_no_improvement_trigger(
     if current_val is None:
         return None
 
+    # Metric identity: only compare runs that used the same metric.
+    current_metric_name = str(_nested_get(scoreboard, "primary_metric.name") or "").strip()
+
     sample_runs: List[Dict[str, Any]] = []
     # Previous values from past runs (most recent first).
     for r in reversed(runs):
@@ -103,6 +106,14 @@ def _pivot_no_improvement_trigger(
             break
         if not isinstance(r, dict):
             continue
+        # Skip runs recorded under a different metric name (e.g. after stage
+        # transition).  Runs with missing/empty name are treated as legacy and
+        # included — they predate metric-identity tracking and are assumed to
+        # belong to the current metric unless proven otherwise.
+        if current_metric_name:
+            run_metric_name = str(_nested_get(r, "primary_metric.name") or "").strip()
+            if run_metric_name and run_metric_name != current_metric_name:
+                continue
         val = _as_float(_nested_get(r, metric_path))
         if val is None:
             continue

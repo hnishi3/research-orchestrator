@@ -15,6 +15,10 @@ from resorch.verification_checklist import generate_verification_checklist, writ
 
 
 _PLACEHOLDER_ANY_RE = re.compile(r"{{[^{}]+}}")
+_LATEX_ENGINE_MISSING_MARKERS = (
+    "ERROR: No LaTeX engine found.",
+    "Or use --no-pdf to generate .tex only.",
+)
 
 
 def _safe_read_json(path: Path) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
@@ -96,6 +100,39 @@ def _load_render_function(repo_root: Path):
     if not callable(func):
         raise RuntimeError("render_manuscript function is missing in render_manuscript.py")
     return func
+
+
+def _format_compile_attempt_log(
+    cmd: List[str],
+    *,
+    return_code: str,
+    stdout: str,
+    stderr: str,
+    attempt: Optional[str] = None,
+    timeout_seconds: Optional[int] = None,
+) -> str:
+    lines: List[str] = []
+    if attempt:
+        lines.append(f"attempt: {attempt}")
+    lines.append(f"command: {' '.join(cmd)}")
+    lines.append(f"return_code: {return_code}")
+    if timeout_seconds is not None:
+        lines.append(f"timeout_seconds: {timeout_seconds}")
+    lines.extend(
+        [
+            "",
+            "--- stdout ---",
+            stdout,
+            "",
+            "--- stderr ---",
+            stderr,
+        ]
+    )
+    return "\n".join(lines).strip() + "\n"
+
+
+def _is_missing_latex_engine_error(stderr: str) -> bool:
+    return all(marker in stderr for marker in _LATEX_ENGINE_MISSING_MARKERS)
 
 
 def _check_scoreboard(scoreboard_path: Path) -> Tuple[str, str, List[str], List[Dict[str, str]]]:
@@ -257,6 +294,7 @@ def _check_claims(workspace: Path) -> Tuple[str, str, List[Dict[str, str]]]:
 def _run_compile_check(workspace: Path, repo_root: Path) -> Tuple[str, str, Optional[Path], str]:
     script_path = repo_root / "scripts" / "compile_paper.py"
     log_path = workspace / "results" / "submission_compile.log"
+    tex_path = workspace / "paper" / "output" / "manuscript.tex"
 
     if not script_path.exists():
         detail = f"compile script not found (skipped): {script_path}"
@@ -270,40 +308,69 @@ def _run_compile_check(workspace: Path, repo_root: Path) -> Tuple[str, str, Opti
     except subprocess.TimeoutExpired as exc:
         timeout_stdout = exc.stdout if isinstance(exc.stdout, str) else ""
         timeout_stderr = exc.stderr if isinstance(exc.stderr, str) else ""
-        log_text = "\n".join(
-            [
-                f"command: {' '.join(cmd)}",
-                "return_code: timeout",
-                "timeout_seconds: 120",
-                "",
-                "--- stdout ---",
-                timeout_stdout,
-                "",
-                "--- stderr ---",
-                timeout_stderr,
-            ]
-        ).strip() + "\n"
+        log_text = _format_compile_attempt_log(
+            cmd,
+            return_code="timeout",
+            stdout=timeout_stdout,
+            stderr=timeout_stderr,
+            timeout_seconds=120,
+        )
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.write_text(log_text, encoding="utf-8")
         detail = "compile_paper.py timed out after 120 seconds"
         return "fail", detail, log_path, log_text
-    log_text = "\n".join(
-        [
-            f"command: {' '.join(cmd)}",
-            f"return_code: {proc.returncode}",
-            "",
-            "--- stdout ---",
-            proc.stdout,
-            "",
-            "--- stderr ---",
-            proc.stderr,
-        ]
-    ).strip() + "\n"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_path.write_text(log_text, encoding="utf-8")
+    log_text = _format_compile_attempt_log(
+        cmd,
+        return_code=str(proc.returncode),
+        stdout=proc.stdout,
+        stderr=proc.stderr,
+        attempt="pdf_compile",
+    )
 
     if proc.returncode == 0:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(log_text, encoding="utf-8")
         return "pass", "compile_paper.py completed successfully", log_path, log_text
+
+    if _is_missing_latex_engine_error(proc.stderr):
+        retry_cmd = [*cmd, "--no-pdf"]
+        try:
+            retry_proc = subprocess.run(retry_cmd, capture_output=True, text=True, timeout=120)
+        except subprocess.TimeoutExpired as exc:
+            timeout_stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+            timeout_stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+            retry_log = _format_compile_attempt_log(
+                retry_cmd,
+                return_code="timeout",
+                stdout=timeout_stdout,
+                stderr=timeout_stderr,
+                attempt="tex_only_retry",
+                timeout_seconds=120,
+            )
+            log_text = "\n\n".join([log_text.rstrip(), retry_log.rstrip()]).strip() + "\n"
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text(log_text, encoding="utf-8")
+            detail = "compile_paper.py --no-pdf timed out after missing LaTeX engine blocked PDF compilation"
+            return "fail", detail, log_path, log_text
+
+        retry_log = _format_compile_attempt_log(
+            retry_cmd,
+            return_code=str(retry_proc.returncode),
+            stdout=retry_proc.stdout,
+            stderr=retry_proc.stderr,
+            attempt="tex_only_retry",
+        )
+        log_text = "\n\n".join([log_text.rstrip(), retry_log.rstrip()]).strip() + "\n"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(log_text, encoding="utf-8")
+
+        if retry_proc.returncode == 0 and tex_path.exists():
+            detail = "compile_paper.py generated manuscript.tex with --no-pdf after PDF compilation was blocked by a missing LaTeX engine"
+            return "needs_human", detail, log_path, log_text
+        return "fail", "compile_paper.py could not generate manuscript.tex after LaTeX engine fallback", log_path, log_text
+
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text(log_text, encoding="utf-8")
     return "fail", f"compile_paper.py failed with exit code {proc.returncode}", log_path, log_text
 
 

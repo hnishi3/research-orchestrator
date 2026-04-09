@@ -121,9 +121,30 @@ def _validate_plan_action_semantics(plan: Dict[str, Any]) -> List[str]:
     return errors
 
 
+_ACTION_KEY_RENAMES: Dict[str, str] = {
+    "action_type": "task_type",
+    "description": "title",
+}
+_KNOWN_ACTION_KEYS = {"title", "task_type", "spec"}
+
+
 def _repair_planned_action_for_runtime(action: Dict[str, Any]) -> Dict[str, Any]:
     """Best-effort repair for planner action drift before validation/execution."""
     out = dict(action)
+
+    # Rename common LLM hallucinated field names to expected names.
+    for wrong, right in _ACTION_KEY_RENAMES.items():
+        if wrong in out and right not in out:
+            log.info("Renaming action field %r -> %r", wrong, right)
+            out[right] = out.pop(wrong)
+
+    # Strip unknown fields so additionalProperties:false doesn't reject them.
+    extra = set(out.keys()) - _KNOWN_ACTION_KEYS
+    if extra:
+        log.info("Stripping unknown action fields: %s", extra)
+        for k in extra:
+            del out[k]
+
     task_type = str(out.get("task_type") or "").strip()
     title = str(out.get("title") or "").strip()
     spec_raw = out.get("spec")
@@ -167,12 +188,37 @@ def _repair_planned_action_for_runtime(action: Dict[str, Any]) -> Dict[str, Any]
     return out
 
 
+_PLAN_KEY_RENAMES: Dict[str, str] = {
+    "stop_condition": "stop_reason",
+}
+_KNOWN_PLAN_KEYS = {
+    "plan_id", "project_id", "iteration", "objective", "notes",
+    "self_confidence", "evidence_strength", "suggested_review",
+    "next_stage", "actions", "alternatives_considered",
+    "literature_findings", "should_stop", "stop_reason",
+}
+
+
 def _repair_plan_actions_for_runtime(plan: Dict[str, Any]) -> Dict[str, Any]:
     """Apply best-effort repairs to all actions in a planner output."""
-    actions = plan.get("actions")
-    if not isinstance(actions, list):
-        return plan
     out = dict(plan)
+
+    # Rename common LLM hallucinated top-level field names.
+    for wrong, right in _PLAN_KEY_RENAMES.items():
+        if wrong in out and right not in out:
+            log.info("Renaming plan field %r -> %r", wrong, right)
+            out[right] = out.pop(wrong)
+
+    # Strip unknown top-level fields.
+    extra = set(out.keys()) - _KNOWN_PLAN_KEYS
+    if extra:
+        log.info("Stripping unknown plan fields: %s", extra)
+        for k in extra:
+            del out[k]
+
+    actions = out.get("actions")
+    if not isinstance(actions, list):
+        return out
     out["actions"] = [
         _repair_planned_action_for_runtime(a) if isinstance(a, dict) else a
         for a in actions

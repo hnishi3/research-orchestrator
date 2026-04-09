@@ -477,6 +477,7 @@ def run_agent_loop(
     _null_metric_streak = 0
     _unchanged_metric_streak = 0
     _prev_metric_value: Optional[float] = None  # sentinel: None means "not yet read"
+    _prev_metric_name: Optional[str] = None  # tracks metric identity for reset on revision
     _watchdog_exempt_stages: set[str] = set()
     _raw_exempt = _watchdog_cfg.get("exempt_stages")
     if isinstance(_raw_exempt, list):
@@ -519,25 +520,70 @@ def run_agent_loop(
         except (TypeError, ValueError):
             return None
 
+    def _read_primary_metric_name() -> Optional[str]:
+        """Read primary_metric.name from the workspace scoreboard."""
+        sb_path = workspace / "results" / "scoreboard.json"
+        try:
+            sb = json.loads(sb_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        if not isinstance(sb, dict):
+            return None
+        pm = sb.get("primary_metric")
+        if not isinstance(pm, dict):
+            return None
+        name = pm.get("name")
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+        return None
+
     # Unique run-level directory so step files are never overwritten across runs.
     _run_ts = utc_now_iso().replace(":", "")
     _run_dir = f"runs/agent/run-{_run_ts}"
 
+    # Last-chance flags: when a watchdog threshold is reached, grant the Planner
+    # one final iteration to revise the metric before force-stopping.
+    _null_last_chance_used = False
+    _unchanged_last_chance_used = False
+    _pivot_last_chance_used = False
+
     for step_idx in range(max_steps):
         # --- Force-stop: null metric watchdog ---
         if _null_metric_max > 0 and _null_metric_streak >= _null_metric_max:
-            stopped_reason = (
-                f"null_metric_force_stop(streak={_null_metric_streak},"
-                f"threshold={_null_metric_max})"
-            )
-            log.warning(
-                "Primary metric has been null for %d consecutive iterations "
-                "(threshold %d) — stopping. Verify the pipeline can produce "
-                "a numeric result.",
-                _null_metric_streak, _null_metric_max,
-            )
-            _generate_stagnation_report(workspace, stopped_reason, steps)
-            break
+            _cur_stage_null = str(get_project(ledger, project_id).get("stage") or "").strip().lower()
+            if _cur_stage_null in _watchdog_exempt_stages:
+                log.info(
+                    "Metric watchdog: null streak %d reached threshold %d "
+                    "but stage '%s' is exempt (metric not expected yet).",
+                    _null_metric_streak, _null_metric_max, _cur_stage_null,
+                )
+            elif not _null_last_chance_used:
+                # Grant Planner one chance to revise the metric or produce a result.
+                _null_last_chance_used = True
+                _generate_stagnation_report(
+                    workspace,
+                    f"null_metric_last_chance(streak={_null_metric_streak},"
+                    f"threshold={_null_metric_max})",
+                    steps,
+                )
+                log.warning(
+                    "Primary metric has been null for %d consecutive iterations "
+                    "(threshold %d) — granting last-chance iteration for Planner "
+                    "to revise metric or produce a result.",
+                    _null_metric_streak, _null_metric_max,
+                )
+            else:
+                stopped_reason = (
+                    f"null_metric_force_stop(streak={_null_metric_streak},"
+                    f"threshold={_null_metric_max})"
+                )
+                log.warning(
+                    "Primary metric has been null for %d consecutive iterations "
+                    "(threshold %d) — last chance exhausted, stopping.",
+                    _null_metric_streak, _null_metric_max,
+                )
+                _generate_stagnation_report(workspace, stopped_reason, steps)
+                break
 
         # --- Force-stop: unchanged metric watchdog ---
         if _unchanged_metric_max > 0 and _unchanged_metric_streak >= _unchanged_metric_max:
@@ -548,6 +594,21 @@ def run_agent_loop(
                     "but stage '%s' is exempt (metrics expected to be stable).",
                     _unchanged_metric_streak, _unchanged_metric_max, _cur_stage,
                 )
+            elif not _unchanged_last_chance_used:
+                # Grant Planner one chance to revise the metric.
+                _unchanged_last_chance_used = True
+                _generate_stagnation_report(
+                    workspace,
+                    f"unchanged_metric_last_chance(streak={_unchanged_metric_streak},"
+                    f"threshold={_unchanged_metric_max},value={_prev_metric_value})",
+                    steps,
+                )
+                log.warning(
+                    "Primary metric unchanged at %s for %d consecutive iterations "
+                    "(threshold %d) — granting last-chance iteration for Planner "
+                    "to revise metric.",
+                    _prev_metric_value, _unchanged_metric_streak, _unchanged_metric_max,
+                )
             else:
                 stopped_reason = (
                     f"unchanged_metric_force_stop(streak={_unchanged_metric_streak},"
@@ -555,7 +616,7 @@ def run_agent_loop(
                 )
                 log.warning(
                     "Primary metric unchanged at %s for %d consecutive iterations "
-                    "(threshold %d) — stopping.",
+                    "(threshold %d) — last chance exhausted, stopping.",
                     _prev_metric_value, _unchanged_metric_streak, _unchanged_metric_max,
                 )
                 _generate_stagnation_report(workspace, stopped_reason, steps)
@@ -563,14 +624,28 @@ def run_agent_loop(
 
         # --- Force-stop: pivot stagnation streak exceeded threshold ---
         if force_stop_after > 0 and pivot_stagnation_streak >= force_stop_after:
-            stopped_reason = f"pivot_stagnation_force_stop(streak={pivot_stagnation_streak},threshold={force_stop_after})"
-            log.warning(
-                "Pivot stagnation streak %d >= force_stop_after %d — stopping before Planner call.",
-                pivot_stagnation_streak, force_stop_after,
-            )
-            _generate_stagnation_report(workspace, stopped_reason, steps)
-            log.info("Stagnation report written to %s/notes/stagnation_report.md", workspace)
-            break
+            if not _pivot_last_chance_used:
+                _pivot_last_chance_used = True
+                _generate_stagnation_report(
+                    workspace,
+                    f"pivot_stagnation_last_chance(streak={pivot_stagnation_streak},"
+                    f"threshold={force_stop_after})",
+                    steps,
+                )
+                log.warning(
+                    "Pivot stagnation streak %d >= force_stop_after %d — "
+                    "granting last-chance iteration for Planner to change approach.",
+                    pivot_stagnation_streak, force_stop_after,
+                )
+            else:
+                stopped_reason = f"pivot_stagnation_force_stop(streak={pivot_stagnation_streak},threshold={force_stop_after})"
+                log.warning(
+                    "Pivot stagnation streak %d >= force_stop_after %d — last chance exhausted, stopping.",
+                    pivot_stagnation_streak, force_stop_after,
+                )
+                _generate_stagnation_report(workspace, stopped_reason, steps)
+                log.info("Stagnation report written to %s/notes/stagnation_report.md", workspace)
+                break
 
         rerun_mode = False
         actions_for_rerun: Optional[List[Dict[str, Any]]] = None
@@ -820,6 +895,25 @@ def run_agent_loop(
 
         # --- Update metric watchdog streaks ---
         _cur_metric = _read_primary_metric_mean()
+        _cur_metric_name = _read_primary_metric_name()
+
+        # Reset all monitoring state when the metric identity changes (stage transition).
+        # This covers name->name, name->None, and None->name transitions.
+        # Skip only the very first iteration (_prev_metric_name is None at init).
+        if _prev_metric_name is not None and _cur_metric_name != _prev_metric_name:
+            log.info(
+                "Metric watchdog: metric name changed '%s' -> '%s', "
+                "resetting all watchdog streaks and pivot stagnation.",
+                _prev_metric_name, _cur_metric_name,
+            )
+            _null_metric_streak = 0
+            _unchanged_metric_streak = 0
+            _prev_metric_value = None
+            pivot_stagnation_streak = 0
+            _null_last_chance_used = False
+            _unchanged_last_chance_used = False
+            _pivot_last_chance_used = False
+
         if _cur_metric is None:
             _null_metric_streak += 1
             _unchanged_metric_streak = 0  # null is a separate condition
@@ -854,6 +948,7 @@ def run_agent_loop(
                     )
                 _unchanged_metric_streak = 0
         _prev_metric_value = _cur_metric
+        _prev_metric_name = _cur_metric_name
 
         _review_rec = iter_out.get("review_recommendation") or {}
         rec = _review_rec.get("level")

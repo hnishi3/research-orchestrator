@@ -381,5 +381,222 @@ def test_unchanged_metric_watchdog_stops_non_exempt_stage(monkeypatch: pytest.Mo
     out = run_agent_loop(ledger=ledger, project_id="p1", objective="test", max_steps=5, dry_run=False)
 
     # 'analysis' is NOT exempt → watchdog should stop after streak reaches threshold.
+    # With last-chance iteration: step 0 sets baseline, step 1 unchanged (streak=1),
+    # step 2 is last-chance iteration, step 3 would be force_stop but Planner didn't
+    # revise → stop before step 3.
     assert "unchanged_metric" in (out.get("stopped_reason") or "")
-    assert iteration_count["n"] == 2  # step 0 sets baseline, step 1 unchanged → stop before step 2
+    assert iteration_count["n"] == 3  # step 0 baseline, step 1 unchanged, step 2 last-chance
+
+
+# ---------------------------------------------------------------------------
+# Last-chance iteration tests
+# ---------------------------------------------------------------------------
+
+
+def _write_scoreboard_with_name(workspace: Path, mean: float, name: str) -> None:
+    """Write scoreboard with both metric mean and name."""
+    results = workspace / "results"
+    results.mkdir(parents=True, exist_ok=True)
+    sb = {"primary_metric": {"name": name, "direction": "maximize", "current": {"mean": mean}}}
+    (results / "scoreboard.json").write_text(
+        json.dumps(sb, indent=2) + "\n", encoding="utf-8",
+    )
+
+
+def test_last_chance_metric_revision_resets_streaks(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """When Planner revises the metric during last-chance iteration, streaks reset and run continues."""
+    ledger = _make_tmp_repo(tmp_path)
+    repo_root = ledger.paths.root
+    (repo_root / "configs").mkdir(parents=True, exist_ok=True)
+    (repo_root / "configs" / "pivot_policy.yaml").write_text(
+        "metric_watchdog:\n  unchanged_metric_force_stop_after: 1\n",
+        encoding="utf-8",
+    )
+
+    project = create_project(ledger=ledger, project_id="p1", title="P1", domain="", stage="analysis", git_init=False)
+    workspace = Path(project["repo_path"])
+    _write_scoreboard_with_name(workspace, mean=0.85, name="complex_rule_fraction")
+
+    iteration_count = {"n": 0}
+
+    def fake_autopilot(**kwargs: Any) -> Dict[str, Any]:
+        iteration_count["n"] += 1
+        step = int(kwargs.get("iteration", 0))
+        # On step 2 (the last-chance iteration), simulate Planner revising the metric
+        if step == 2:
+            _write_scoreboard_with_name(workspace, mean=0.5, name="glider_rules_found")
+        return {
+            "plan": {
+                "plan_id": f"plan{step}", "project_id": project["id"], "iteration": step,
+                "objective": "", "self_confidence": 0.5, "evidence_strength": 0.5,
+                "actions": [], "should_stop": step >= 4,
+                "stop_reason": "done" if step >= 4 else None,
+            },
+            "plan_artifact_path": "notes/autopilot/plan.json",
+            "started_at": "2026-02-01T00:00:00Z",
+            "project_stage": {"before": "analysis", "after": "analysis", "changed": False, "requested": None},
+            "tasks_created": [], "tasks_ran": [],
+            "git_change_summary": {"is_git": False, "changed_lines": 10, "changed_files": 1, "changed_paths": []},
+            "failure_streaks": {"any": 0, "same_task": 0},
+            "stalled_jobs": [], "ready_stage_transitions": [],
+            "review_recommendation": {"level": "none", "reasons": [], "targets": []},
+        }
+
+    monkeypatch.setattr("resorch.agent_loop.run_autopilot_iteration", fake_autopilot)
+
+    out = run_agent_loop(ledger=ledger, project_id="p1", objective="test", max_steps=6, dry_run=False)
+
+    # Step 0: baseline (0.85, "complex_rule_fraction")
+    # Step 1: unchanged → streak=1 (hits threshold)
+    # Step 2: last-chance → Planner revises metric → streaks reset
+    # Step 3: new metric baseline
+    # Step 4: should_stop=True → done
+    assert "unchanged_metric" not in (out.get("stopped_reason") or "")
+    assert iteration_count["n"] == 5  # ran through to should_stop at step 4
+
+
+def test_null_metric_last_chance_then_stop(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Null metric watchdog grants one last-chance iteration before force_stop."""
+    ledger = _make_tmp_repo(tmp_path)
+    repo_root = ledger.paths.root
+    (repo_root / "configs").mkdir(parents=True, exist_ok=True)
+    (repo_root / "configs" / "pivot_policy.yaml").write_text(
+        "metric_watchdog:\n  null_metric_force_stop_after: 1\n",
+        encoding="utf-8",
+    )
+
+    project = create_project(ledger=ledger, project_id="p1", title="P1", domain="", stage="analysis", git_init=False)
+    workspace = Path(project["repo_path"])
+    # No scoreboard → metric will be null from the start
+
+    iteration_count = {"n": 0}
+
+    def fake_autopilot(**kwargs: Any) -> Dict[str, Any]:
+        iteration_count["n"] += 1
+        step = int(kwargs.get("iteration", 0))
+        return {
+            "plan": {
+                "plan_id": f"plan{step}", "project_id": project["id"], "iteration": step,
+                "objective": "", "self_confidence": 0.5, "evidence_strength": 0.5,
+                "actions": [], "should_stop": False,
+            },
+            "plan_artifact_path": "notes/autopilot/plan.json",
+            "started_at": "2026-02-01T00:00:00Z",
+            "project_stage": {"before": "analysis", "after": "analysis", "changed": False, "requested": None},
+            "tasks_created": [], "tasks_ran": [],
+            "git_change_summary": {"is_git": False, "changed_lines": 10, "changed_files": 1, "changed_paths": []},
+            "failure_streaks": {"any": 0, "same_task": 0},
+            "stalled_jobs": [], "ready_stage_transitions": [],
+            "review_recommendation": {"level": "none", "reasons": [], "targets": []},
+        }
+
+    monkeypatch.setattr("resorch.agent_loop.run_autopilot_iteration", fake_autopilot)
+
+    out = run_agent_loop(ledger=ledger, project_id="p1", objective="test", max_steps=5, dry_run=False)
+
+    # Step 0: null (streak=1, hits threshold)
+    # Step 1: last-chance iteration (Planner runs but doesn't fix)
+    # Step 2: still null → force_stop
+    assert "null_metric" in (out.get("stopped_reason") or "")
+    assert iteration_count["n"] == 2  # step 0 + step 1 (last-chance), stop before step 2
+
+
+def test_stagnation_report_written_on_last_chance(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Stagnation report is written during the last-chance iteration (before Planner runs)."""
+    ledger = _make_tmp_repo(tmp_path)
+    repo_root = ledger.paths.root
+    (repo_root / "configs").mkdir(parents=True, exist_ok=True)
+    (repo_root / "configs" / "pivot_policy.yaml").write_text(
+        "metric_watchdog:\n  unchanged_metric_force_stop_after: 1\n",
+        encoding="utf-8",
+    )
+
+    project = create_project(ledger=ledger, project_id="p1", title="P1", domain="", stage="analysis", git_init=False)
+    workspace = Path(project["repo_path"])
+    _write_scoreboard(workspace, mean=0.175)
+
+    stagnation_report_seen_by_planner = {"seen": False}
+
+    def fake_autopilot(**kwargs: Any) -> Dict[str, Any]:
+        step = int(kwargs.get("iteration", 0))
+        # Check if stagnation report exists when Planner is called
+        stag_path = workspace / "notes" / "stagnation_report.md"
+        if stag_path.exists() and "last_chance" in stag_path.read_text():
+            stagnation_report_seen_by_planner["seen"] = True
+        return {
+            "plan": {
+                "plan_id": f"plan{step}", "project_id": project["id"], "iteration": step,
+                "objective": "", "self_confidence": 0.5, "evidence_strength": 0.5,
+                "actions": [], "should_stop": False,
+            },
+            "plan_artifact_path": "notes/autopilot/plan.json",
+            "started_at": "2026-02-01T00:00:00Z",
+            "project_stage": {"before": "analysis", "after": "analysis", "changed": False, "requested": None},
+            "tasks_created": [], "tasks_ran": [],
+            "git_change_summary": {"is_git": False, "changed_lines": 10, "changed_files": 1, "changed_paths": []},
+            "failure_streaks": {"any": 0, "same_task": 0},
+            "stalled_jobs": [], "ready_stage_transitions": [],
+            "review_recommendation": {"level": "none", "reasons": [], "targets": []},
+        }
+
+    monkeypatch.setattr("resorch.agent_loop.run_autopilot_iteration", fake_autopilot)
+
+    run_agent_loop(ledger=ledger, project_id="p1", objective="test", max_steps=5, dry_run=False)
+
+    # The stagnation report with "last_chance" should exist when the Planner runs
+    # during the last-chance iteration.
+    assert stagnation_report_seen_by_planner["seen"], (
+        "Stagnation report should be visible to Planner during last-chance iteration"
+    )
+
+
+def test_pivot_stagnation_last_chance_then_stop(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Pivot stagnation watchdog grants one last-chance iteration before force_stop."""
+    ledger = _make_tmp_repo(tmp_path)
+    repo_root = ledger.paths.root
+    (repo_root / "configs").mkdir(parents=True, exist_ok=True)
+    # force_stop_after=1: one pivot_no_improvement fires → last-chance → second fires → stop
+    (repo_root / "configs" / "pivot_policy.yaml").write_text(
+        "no_improvement:\n  force_stop_after: 1\n",
+        encoding="utf-8",
+    )
+
+    project = create_project(ledger=ledger, project_id="p1", title="P1", domain="", stage="analysis", git_init=False)
+    workspace = Path(project["repo_path"])
+    _write_scoreboard(workspace, mean=0.5)
+
+    iteration_count = {"n": 0}
+
+    def fake_autopilot(**kwargs: Any) -> Dict[str, Any]:
+        iteration_count["n"] += 1
+        step = int(kwargs.get("iteration", 0))
+        # Every iteration reports pivot_no_improvement to bump the streak
+        return {
+            "plan": {
+                "plan_id": f"plan{step}", "project_id": project["id"], "iteration": step,
+                "objective": "", "self_confidence": 0.5, "evidence_strength": 0.5,
+                "actions": [], "should_stop": False,
+            },
+            "plan_artifact_path": "notes/autopilot/plan.json",
+            "started_at": "2026-02-01T00:00:00Z",
+            "project_stage": {"before": "analysis", "after": "analysis", "changed": False, "requested": None},
+            "tasks_created": [], "tasks_ran": [],
+            "git_change_summary": {"is_git": False, "changed_lines": 10, "changed_files": 1, "changed_paths": []},
+            "failure_streaks": {"any": 0, "same_task": 0},
+            "stalled_jobs": [], "ready_stage_transitions": [],
+            "review_recommendation": {
+                "level": "none",
+                "reasons": [f"pivot_no_improvement(delta=0.0)"],
+                "targets": [],
+            },
+        }
+
+    monkeypatch.setattr("resorch.agent_loop.run_autopilot_iteration", fake_autopilot)
+
+    out = run_agent_loop(ledger=ledger, project_id="p1", objective="test", max_steps=5, dry_run=False)
+
+    # Step 0: Planner runs (count=1), pivot fires → streak=1 (hits threshold)
+    # Step 1: last-chance → Planner runs (count=2), pivot fires again → streak=2
+    # Step 2: streak=2 >= threshold, last-chance used → force_stop
+    assert "pivot_stagnation" in (out.get("stopped_reason") or "")
+    assert iteration_count["n"] == 2  # step 0 + step 1 (last-chance), stop before step 2
